@@ -1,5 +1,5 @@
 #
-# Cookbook Name:: nativex-blockdevice
+# Cookbook Name:: blockdevice-nativex
 # Recipe:: default
 #
 # Copyright 2014, NativeX
@@ -16,4 +16,4 @@ when 'redhat','centos','fedora','amazon'
   package 'xfsprogs-devel'
 end
 
-include_recipe "nativex-blockdevice::volumes"
+include_recipe "blockdevice-nativex::volumes"

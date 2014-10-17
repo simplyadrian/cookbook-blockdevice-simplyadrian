@@ -1,11 +1,11 @@
-nativex-blockdevice CHANGELOG
+blockdevice-nativex CHANGELOG
 =============================
 
-This file is used to list changes made in each version of the nativex-blockdevice cookbook.
+This file is used to list changes made in each version of the blockdevice-nativex cookbook.
 
 0.1.0
 -----
-- [your_name] - Initial release of nativex-blockdevice
+- [your_name] - Initial release of blockdevice-nativex
 
 - - -
 Check the [Markdown Syntax Guide](http://daringfireball.net/projects/markdown/syntax) for help with Markdown.

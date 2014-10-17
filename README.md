@@ -1,4 +1,4 @@
-nativex-blockdevice Cookbook
+blockdevice-nativex Cookbook
 ============================
 TODO: Enter the cookbook description here.
 
@@ -11,14 +11,14 @@ TODO: List your cookbook requirements. Be sure to include any requirements this 
 
 e.g.
 #### packages
-- `toaster` - nativex-blockdevice needs toaster to brown your bagel.
+- `toaster` - blockdevice-nativex needs toaster to brown your bagel.
 
 Attributes
 ----------
 TODO: List your cookbook attributes here.
 
 e.g.
-#### nativex-blockdevice::default
+#### blockdevice-nativex::default
 <table>
   <tr>
     <th>Key</th>
@@ -27,7 +27,7 @@ e.g.
     <th>Default</th>
   </tr>
   <tr>
-    <td><tt>['nativex-blockdevice']['bacon']</tt></td>
+    <td><tt>['blockdevice-nativex']['bacon']</tt></td>
     <td>Boolean</td>
     <td>whether to include bacon</td>
     <td><tt>true</tt></td>
@@ -36,17 +36,17 @@ e.g.
 
 Usage
 -----
-#### nativex-blockdevice::default
+#### blockdevice-nativex::default
 TODO: Write usage instructions for each cookbook.
 
 e.g.
-Just include `nativex-blockdevice` in your node's `run_list`:
+Just include `blockdevice-nativex` in your node's `run_list`:
 
 ```json
 {
   "name":"my_node",
   "run_list": [
-    "recipe[nativex-blockdevice]"
+    "recipe[blockdevice-nativex]"
   ]
 }
 ```
