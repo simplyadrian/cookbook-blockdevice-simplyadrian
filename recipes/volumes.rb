@@ -62,7 +62,7 @@ if node[:nativex_blockdevice][:ec2] || node[:cloud][:provider] == 'ec2'
     mount '/mnt/ebs' do
       device device_id
       fstype 'ext4'
-      options 'noatime,nobootwait'
+      options 'noatime'
       action [:mount]
     end
   end
