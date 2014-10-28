@@ -1,22 +1,24 @@
-# The database recipe should be included by any server running a DB. It creates
-# a /data directory and, if on EC2, will mount an EBS volume here
- 
-directory '/mnt/ebs' do
+# Creates a directory and, if on EC2, will mount an EBS volume or volumes.
+
+package 'lvm2'
+
+directory node[:blockdevice_nativex][:dir] do
   mode '0755'
+  action :create
 end
 
-if node[:nativex_blockdevice][:ec2] || node[:cloud][:provider] == 'ec2'
+if node[:blockdevice_nativex][:ec2] || node[:cloud][:provider] == 'ec2'
   aws = Chef::EncryptedDataBagItem.load("credentials", "aws")
   include_recipe 'aws'
  
-  if node[:nativex_blockdevice][:ebs][:raid]
+  if node[:blockdevice_nativex][:ebs][:raid]
  
     aws_ebs_raid 'data_volume_raid' do
-      mount_point '/mnt/ebs'
-      disk_count 4
-      disk_size node[:nativex_blockdevice][:ebs][:size]
-      level 10
-      filesystem 'ext4'
+      mount_point node[:blockdevice_nativex][:dir]
+      disk_count node[:blockdevice_nativex][:ebs][:count]
+      disk_size node[:blockdevice_nativex][:ebs][:size]
+      level node[:blockdevice_nativex][:ebs][:level]
+      filesystem node[:blockdevice_nativex][:filesystem]
       action :auto_attach
     end
  
@@ -37,7 +39,7 @@ if node[:nativex_blockdevice][:ec2] || node[:cloud][:provider] == 'ec2'
     aws_ebs_volume 'data_volume' do
       aws_access_key aws['aws_access_key_id']
       aws_secret_access_key aws['aws_secret_access_key']
-      size node[:nativex_blockdevice][:ebs][:size]
+      size node[:blockdevice_nativex][:ebs][:size]
       device device_id.gsub('xvd', 'sd') # aws uses sdx instead of xvdx
       action [:create, :attach]
     end
@@ -56,12 +58,12 @@ if node[:nativex_blockdevice][:ec2] || node[:cloud][:provider] == 'ec2'
  
     # create a filesystem
     execute 'mkfs' do
-      command "mkfs -t ext4 #{device_id}"
+      command "mkfs -t #{node[:blockdevice_nativex][:filesystem]} #{device_id}"
     end
  
-    mount '/mnt/ebs' do
+    mount node[:blockdevice_nativex][:dir] do
       device device_id
-      fstype 'ext4'
+      fstype node[:blockdevice_nativex][:filesystem]
       options 'noatime'
       action [:mount]
     end

@@ -10,10 +10,13 @@
 # xfsdump is not an Amazon Linux package at this moment.
 case node[:platform]
 when 'debian','ubuntu'
-  package 'xfsdump'
+  package 'xfsprogs'
   package 'xfslibs-dev'
+  package 'xfsdump'
 when 'redhat','centos','fedora','amazon'
+  package 'xfsprogs'
   package 'xfsprogs-devel'
+  package 'xfsdump'
 end
 
 include_recipe "blockdevice-nativex::volumes"
