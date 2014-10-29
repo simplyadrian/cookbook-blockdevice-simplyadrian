@@ -1,6 +1,6 @@
 default[:blockdevice_nativex][:ec2] = false
 default[:blockdevice_nativex][:dir] = '/mnt/ebs'
-default[:blockdevice_nativex][:filesystem] = 'xfs'
+default[:blockdevice_nativex][:filesystem] = 'ext4'
 default[:blockdevice_nativex][:ebs] = {
   :raid => true,
   :count=> 4,
