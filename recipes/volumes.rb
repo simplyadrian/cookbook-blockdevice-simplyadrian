@@ -71,7 +71,7 @@ end
 aws_resource_tag 'my awesome raid set' do
   aws_access_key aws['aws_access_key_id']
   aws_secret_access_key aws['aws_secret_access_key']
-  resource_id node['aws']['ebs_volume'].select { |v| v["volume_id"] }
+  resource_id node['aws']['ebs_volume'].select { |k,v| v.to_s.match(/vol-/) }
   tags({"Name" => node.fqdn,
         "Environment" => node.chef_environment})
 end
