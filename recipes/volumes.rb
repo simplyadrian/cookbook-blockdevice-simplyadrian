@@ -68,10 +68,13 @@ if node[:blockdevice_nativex][:ec2] || node[:cloud][:provider] == 'ec2'
   end
 end
 
-aws_resource_tag 'my awesome raid set' do
+resources = node['aws']['ebs_volume'].values.to_s
+resourceids = resources.scan(/vol-[a-zA-Z0-9]+/).to_a
+
+aws_resource_tag 'tag resources' do
   aws_access_key aws['aws_access_key_id']
   aws_secret_access_key aws['aws_secret_access_key']
-  resource_id node['aws']['ebs_volume'].select { |k,v| v.to_s.match(/vol-/) }
-  tags({"Name" => node.fqdn,
+  resource_id resourceids
+  tags({"Name" => node.hostname,
         "Environment" => node.chef_environment})
 end
