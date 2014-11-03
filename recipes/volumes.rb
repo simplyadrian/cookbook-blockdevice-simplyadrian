@@ -20,7 +20,7 @@ if node[:blockdevice_nativex][:ec2] || node[:cloud][:provider] == 'ec2'
       filesystem node[:blockdevice_nativex][:filesystem]
       action :auto_attach
     end
- 
+
   else
  
     # get a device id to use
@@ -72,7 +72,7 @@ end
 volumes = node['aws']['ebs_volume'].values.to_s
 volumeids = volumes.scan(/vol-[a-zA-Z0-9]+/).to_a
 
-aws_resource_tag 'tag resources' do
+aws_resource_tag 'tag_data_volumes' do
   aws_access_key aws['aws_access_key_id']
   aws_secret_access_key aws['aws_secret_access_key']
   resource_id volumeids
