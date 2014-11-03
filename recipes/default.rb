@@ -20,3 +20,4 @@ when 'redhat','centos','fedora','amazon'
 end
 
 include_recipe "blockdevice-nativex::volumes"
+include_recipe "blockdevice-nativex::snapshots"

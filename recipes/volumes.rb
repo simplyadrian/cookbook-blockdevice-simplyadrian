@@ -3,6 +3,7 @@
 directory node[:blockdevice_nativex][:dir] do
   mode '0755'
   action :create
+  not_if { ::File.directory?("#{node['blockdevice_nativex']['dir']}") }
 end
 
 if node[:blockdevice_nativex][:ec2] || node[:cloud][:provider] == 'ec2'
@@ -68,13 +69,13 @@ if node[:blockdevice_nativex][:ec2] || node[:cloud][:provider] == 'ec2'
   end
 end
 
-resources = node['aws']['ebs_volume'].values.to_s
-resourceids = resources.scan(/vol-[a-zA-Z0-9]+/).to_a
+volumes = node['aws']['ebs_volume'].values.to_s
+volumeids = volumes.scan(/vol-[a-zA-Z0-9]+/).to_a
 
 aws_resource_tag 'tag resources' do
   aws_access_key aws['aws_access_key_id']
   aws_secret_access_key aws['aws_secret_access_key']
-  resource_id resourceids
+  resource_id volumeids
   tags({"Name" => node.hostname,
         "Environment" => node.chef_environment})
 end
