@@ -78,4 +78,5 @@ aws_resource_tag 'tag resources' do
   resource_id volumeids
   tags({"Name" => node.hostname,
         "Environment" => node.chef_environment})
+  action [:add, :update]
 end
