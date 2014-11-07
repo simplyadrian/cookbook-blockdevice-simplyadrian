@@ -1,23 +1,18 @@
  # Creates a directory and, if on EC2, will mount an EBS volume or volumes.
 
-directory node[:blockdevice_nativex][:dir] do
-  mode '0755'
-  action :create
-  not_if { ::File.directory?("#{node['blockdevice_nativex']['dir']}") }
-end
-
-if node[:blockdevice_nativex][:ec2] || node[:cloud][:provider] == 'ec2'
+if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
   aws = Chef::EncryptedDataBagItem.load("credentials", "aws")
   include_recipe 'aws'
  
-  if node[:blockdevice_nativex][:ebs][:raid]
+  if node['blockdevice_nativex']['ebs']['raid']
  
     aws_ebs_raid 'data_volume_raid' do
-      mount_point node[:blockdevice_nativex][:dir]
-      disk_count node[:blockdevice_nativex][:ebs][:count]
-      disk_size node[:blockdevice_nativex][:ebs][:size]
-      level node[:blockdevice_nativex][:ebs][:level]
-      filesystem node[:blockdevice_nativex][:filesystem]
+      mount_point node['blockdevice_nativex']['dir']
+      mount_point_group node['blockdevice_nativex']['mount_point_group']
+      disk_count node['blockdevice_nativex']['ebs']['count']
+      disk_size node['blockdevice_nativex']['ebs']['size']
+      level node['blockdevice_nativex']['ebs']['level']
+      filesystem node['blockdevice_nativex']['filesystem']
       action :auto_attach
     end
 
@@ -30,16 +25,17 @@ if node[:blockdevice_nativex][:ec2] || node[:cloud][:provider] == 'ec2'
  
     # save the device used for data_volume on this node -- this volume will now always
     # be attached to this device
-    node.set_unless[:aws][:ebs_volume][:data_volume][:device] = "/dev/xvd#{devid}"
+    node.set_unless['aws']['ebs_volume']['data_volume']['device'] = "/dev/xvd#{devid}"
  
-    device_id = node[:aws][:ebs_volume][:data_volume][:device]
+      
  
     # no raid, so just mount and format a single volume
     aws_ebs_volume 'data_volume' do
       aws_access_key aws['aws_access_key_id']
       aws_secret_access_key aws['aws_secret_access_key']
-      size node[:blockdevice_nativex][:ebs][:size]
+      size node['blockdevice_nativex']['ebs']['size']
       device device_id.gsub('xvd', 'sd') # aws uses sdx instead of xvdx
+      most_recent_snapshot node['blockdevice_nativex']['ebs']['most_recent']
       action [:create, :attach]
     end
  
@@ -57,12 +53,13 @@ if node[:blockdevice_nativex][:ec2] || node[:cloud][:provider] == 'ec2'
  
     # create a filesystem
     execute 'mkfs' do
-      command "mkfs -t #{node[:blockdevice_nativex][:filesystem]} #{device_id}"
+      command "mkfs -t #{node['blockdevice_nativex']['filesystem']} #{device_id}"
+      not_if "grep #{device_id} /proc/mounts"
     end
  
-    mount node[:blockdevice_nativex][:dir] do
+    mount node['blockdevice_nativex']['dir'] do
       device device_id
-      fstype node[:blockdevice_nativex][:filesystem]
+      fstype node['blockdevice_nativex']['filesystem']
       options 'noatime'
       action [:mount]
     end
