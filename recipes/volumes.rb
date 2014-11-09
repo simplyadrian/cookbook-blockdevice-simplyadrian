@@ -1,9 +1,15 @@
- # Creates a directory and, if on EC2, will mount an EBS volume or volumes.
+directory node['blockdevice_nativex']['dir'] do
+  group node['blockdevice_nativex']['mount_point_group']
+  mode 775
+  recursive true
+  action :create
+  not_if { ::File.directory?("#{node['blockdevice_nativex']['dir']}") }
+end 
 
 if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
   aws = Chef::EncryptedDataBagItem.load("credentials", "aws")
   include_recipe 'aws'
- 
+
   if node['blockdevice_nativex']['ebs']['raid']
  
     aws_ebs_raid 'data_volume_raid' do
@@ -27,7 +33,7 @@ if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
     # be attached to this device
     node.set_unless['aws']['ebs_volume']['data_volume']['device'] = "/dev/xvd#{devid}"
  
-      
+    device_id = node['aws']['ebs_volume']['data_volume']['device']      
  
     # no raid, so just mount and format a single volume
     aws_ebs_volume 'data_volume' do

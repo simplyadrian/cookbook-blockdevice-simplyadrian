@@ -1,16 +1,24 @@
 if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
   aws = Chef::EncryptedDataBagItem.load("credentials", "aws")
   include_recipe 'aws'
-  include_recipe "blockdevice_nativex::volumes"
-  
 
-  if node['blockdevice_nativex']['filesystem'] == 'xfs'
+  if node['blockdevice_nativex']['filesystem'] == "xfs"
     execute 'xfs freeze' do
-      command "xfs_freeze -f #{node.db_snapshot.ebs_vol_dev}"
+      command "xfs_freeze -f #{node['blockdevice_nativex']['dir']}"
     end
   end
-  
-  devices = node['aws']['ebs_volume'].values.to_s.scan(/vol-[a-zA-Z0-9]+/)
+
+  if node['blockdevice_nativex']['ebs']['raid']
+    device_id = "/dev/md0"
+  else
+    device_id = node['aws']['ebs_volume']['data_volume']['device']
+  end
+
+  if node['blockdevice_nativex']['ebs']['raid']
+    devices = node['aws']['ebs_volume'].values.to_s.scan(/vol-[a-zA-Z0-9]+/)
+  else
+    devices = node['aws']['ebs_volume']['data_volume']['volume_id'].to_s.scan(/vol-[a-zA-Z0-9]+/)
+  end
 
   devices.each do |values|
     aws_ebs_volume "#{node.hostname}_#{node.chef_environment}" do
@@ -28,7 +36,7 @@ if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
 
   if node['blockdevice_nativex']['filesystem'] == 'xfs'
     execute 'xfs unfreeze' do
-      command "xfs_freeze -u #{node.db_snapshot.ebs_vol_dev}"
+      command "xfs_freeze -u #{node['blockdevice_nativex']['dir']}"
     end
   end
 
