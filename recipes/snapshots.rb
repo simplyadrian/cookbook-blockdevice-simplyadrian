@@ -1,6 +1,8 @@
+::Chef::Provider.send(:include, Aws::ebs_volume)
+
 if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
   aws = Chef::EncryptedDataBagItem.load("credentials", "aws")
-  include_recipe 'aws'
+  include_recipe 'aws'  
 
   if node['blockdevice_nativex']['filesystem'] == "xfs"
     execute 'xfs freeze' do
@@ -15,7 +17,7 @@ if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
   end
 
   if node['blockdevice_nativex']['ebs']['raid']
-    devices = node['aws']['ebs_volume'].values.to_s.scan(/vol-[a-zA-Z0-9]+/)
+    devices = volume_by_id
   else
     devices = node['aws']['ebs_volume']['data_volume']['volume_id'].to_s.scan(/vol-[a-zA-Z0-9]+/)
   end
@@ -26,7 +28,6 @@ if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
       aws_secret_access_key aws['aws_secret_access_key']  
       size node['blockdevice_nativex']['ebs']['size']
       device device_id
-      snapshots_to_keep node['blockdevice_nativex']['snapshots_to_keep']
       action :snapshot
       volume_id values
       description "snapshot of volume attached to #{node.hostname}_#{node.chef_environment}"
@@ -41,6 +42,7 @@ if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
   end
 
   aws_ebs_volume "#{node.hostname}_#{node.chef_environment}" do
+    snapshots_to_keep node['blockdevice_nativex']['snapshots_to_keep']
     action :prune
   end
 end
