@@ -10,4 +10,5 @@
 
 include_recipe "xfs::default" if node['blockdevice_nativex']['filesystem'] == "xfs"
 include_recipe "blockdevice-nativex::volumes"
+include_recipe "blockdevice-nativex::tags"
 

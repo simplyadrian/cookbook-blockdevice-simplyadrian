@@ -1,4 +1,7 @@
-::Chef::Provider.send(:include, Aws::ebs_volume)
+# include helper methods
+#class ::Chef::Recipe
+#  include ::NativeX::VolumeId::Helper
+#end
 
 if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
   aws = Chef::EncryptedDataBagItem.load("credentials", "aws")
@@ -17,7 +20,7 @@ if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
   end
 
   if node['blockdevice_nativex']['ebs']['raid']
-    devices = volume_by_id
+    devices = node['aws']['ebs_volume'].values.to_s.scan(/vol-[a-zA-Z0-9]+/)
   else
     devices = node['aws']['ebs_volume']['data_volume']['volume_id'].to_s.scan(/vol-[a-zA-Z0-9]+/)
   end
