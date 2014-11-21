@@ -70,8 +70,13 @@ if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
       action [:mount]
     end
   end
+
   execute "fixup #{node['blockdevice_nativex']['dir']} group" do
     command "chown -Rf :#{node['blockdevice_nativex']['mount_point_group']} #{node['blockdevice_nativex']['dir']}"
   only_if { Etc.getgrgid(File.stat("#{node['blockdevice_nativex']['dir']}").gid).name != "#{node['blockdevice_nativex']['mount_point_group']}" }
+  end
+
+  execute "fixup #{node['blockdevice_nativex']['dir']} permissions" do
+    command "chmod -Rf 775 #{node['blockdevice_nativex']['dir']}"
   end
 end
