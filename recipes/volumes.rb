@@ -33,7 +33,7 @@ if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
     # be attached to this device
     node.set_unless['aws']['ebs_volume']['data_volume']['device'] = "/dev/xvd#{devid}"
  
-    device_id = node['aws']['ebs_volume']['data_volume']['device']      
+    device_id = node['aws']['ebs_volume']['data_volume']['device']
  
     # no raid, so just mount and format a single volume
     aws_ebs_volume 'data_volume' do
@@ -71,12 +71,18 @@ if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
     end
   end
 
+  permission_recurse_switch = 'R'
+
+  if node['blockdevice_nativex']['recurse_permissions'] == false
+    permission_recurse_switch = ''
+  end
+
   execute "fixup #{node['blockdevice_nativex']['dir']} group" do
-    command "chown -Rf :#{node['blockdevice_nativex']['mount_point_group']} #{node['blockdevice_nativex']['dir']}"
-  only_if { Etc.getgrgid(File.stat("#{node['blockdevice_nativex']['dir']}").gid).name != "#{node['blockdevice_nativex']['mount_point_group']}" }
+    command "chown -#{permission_recurse_switch}f :#{node['blockdevice_nativex']['mount_point_group']} #{node['blockdevice_nativex']['dir']}"
+    only_if { Etc.getgrgid(File.stat("#{node['blockdevice_nativex']['dir']}").gid).name != "#{node['blockdevice_nativex']['mount_point_group']}" }
   end
 
   execute "fixup #{node['blockdevice_nativex']['dir']} permissions" do
-    command "chmod -Rf 775 #{node['blockdevice_nativex']['dir']}"
+    command "chmod -#{permission_recurse_switch}f 775 #{node['blockdevice_nativex']['dir']}"
   end
 end

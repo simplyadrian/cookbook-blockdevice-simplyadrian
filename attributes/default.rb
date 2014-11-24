@@ -1,6 +1,7 @@
 default['blockdevice_nativex']['ec2'] = false
 default['blockdevice_nativex']['dir'] = "/mnt/ebs"
 default['blockdevice_nativex']['mount_point_group'] = "root"
+default['blockdevice_nativex']['recurse_permissions'] = true
 default['blockdevice_nativex']['filesystem'] = "ext4"
 default['blockdevice_nativex']['snapshots_to_keep'] = 5
 default['blockdevice_nativex']['ebs'] = {
