@@ -1,8 +1,3 @@
-# include helper methods
-#class ::Chef::Recipe
-#  include ::NativeX::VolumeId::Helper
-#end
-
 if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
   aws = Chef::EncryptedDataBagItem.load("credentials", "aws")
   include_recipe 'aws'  
