@@ -56,15 +56,15 @@ if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
         end
       end
     end
- 
+    
     # create a filesystem
     execute 'mkfs' do
       command "mkfs -t #{node['blockdevice_nativex']['filesystem']} #{device_id}"
-      
+
       # Note the escaped quotes for bash 
       # blkid works on CentOS and hopefully elsewhere. See: http://unix.stackexchange.com/a/53552/55079
-      # TYPE=\\"#{node['blockdevice_nativex']['filesystem']}\\" seems to work for 'xfs' . If it doesn't work for something else, we might want a mapping of mkfs -t arguments to blkid outputs.
-      not_if 'blkid #{device_id} | grep " TYPE=\\"#{node[\'blockdevice_nativex\'][\'filesystem\']}\\""'
+      # TYPE=\\\"#{node['blockdevice_nativex']['filesystem']}\\\" seems to work for 'xfs' . If it doesn't work for something else, we might want a mapping of mkfs -t arguments to blkid outputs.
+      not_if "blkid #{device_id} | grep \" TYPE=\\\"#{node['blockdevice_nativex']['filesystem']}\\\"\""
     end
  
     mount node['blockdevice_nativex']['dir'] do
