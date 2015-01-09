@@ -9,5 +9,6 @@ default['blockdevice_nativex']['ebs'] = {
   'count'=> 4,
   'size' => 1024, # size is in GB
   'level' => 10,
-  'most_recent_snapshot' => false
+  'most_recent_snapshot' => false,
+  'hvm' => false
 }
