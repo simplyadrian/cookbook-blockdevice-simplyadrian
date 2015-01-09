@@ -4,19 +4,19 @@ directory node['blockdevice_nativex']['dir'] do
   recursive true
   action :create
   not_if { ::File.directory?("#{node['blockdevice_nativex']['dir']}") }
-end 
+end
 
 if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
   aws = Chef::EncryptedDataBagItem.load("credentials", "aws")
   include_recipe 'aws'
 
   if node['blockdevice_nativex']['ebs']['raid']
- 
     aws_ebs_raid 'data_volume_raid' do
       mount_point node['blockdevice_nativex']['dir']
       mount_point_group node['blockdevice_nativex']['mount_point_group']
       disk_count node['blockdevice_nativex']['ebs']['count']
       disk_size node['blockdevice_nativex']['ebs']['size']
+      hvm node['blockdevice_nativex']['ebs']['hvm']
       level node['blockdevice_nativex']['ebs']['level']
       filesystem node['blockdevice_nativex']['filesystem']
       action :auto_attach
@@ -77,9 +77,7 @@ if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
 
   permission_recurse_switch = 'R'
 
-  if node['blockdevice_nativex']['recurse_permissions'] == false
-    permission_recurse_switch = ''
-  end
+  permission_recurse_switch = '' unless node['blockdevice_nativex']['recurse_permissions']
 
   execute "fixup #{node['blockdevice_nativex']['dir']} group" do
     command "chown -#{permission_recurse_switch}f :#{node['blockdevice_nativex']['mount_point_group']} #{node['blockdevice_nativex']['dir']}"
