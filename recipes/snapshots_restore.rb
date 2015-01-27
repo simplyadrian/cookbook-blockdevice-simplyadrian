@@ -1,17 +1,21 @@
-if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
+if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
+    node['blockdevice_nativex']['restore'][:take_action]
 
   aws = Chef::EncryptedDataBagItem.load("credentials", "aws")
   include_recipe 'aws'
-  require 'right_aws'
-  #extend Opscode::Aws::Ec2
-  include NativeX::Aws::Snapshots
+  ::Chef::Recipe.send(:include, Nativex::Blockdevice::Instance)
+  ::Chef::Recipe.send(:include, Nativex::Blockdevice::Snapshots)
+  ::Chef::Recipe.send(:include, Nativex::Blockdevice::Volumes)
 
-  original_volume_ids = node['aws']['ebs_volume'].to_s.scan(/vol-[a-zA-Z0-9]+/)
-  snap_ids = device_id = nil
+  original_volume_ids = node['aws']['ebs_volume'].to_s.scan(/vol-[a-zA-Z0-9]+/) # add logic to match device, maybe move in loop below
+  device_id = nil
+  sizes = snap_ids = []
+
+  raid = node['blockdevice_nativex']['ebs']['raid']
 
   # Find volume based on attribute otherwise take the first ebs volume
-  if node['blockdevice_nativex']['ebs']['raid']
-    device_to_restore = node['blockdevice_nativex']['restore']['device_to_restore']
+  if raid
+    device_to_restore = node['blockdevice_nativex']['restore'][:device_to_restore]
     device_ids = nil
     Dir.glob('/dev/md[0-9]*').each do |dir| device_ids << dir end
     if device_ids.length == 1 || (device_ids > 1 && device_to_restore.blank?)
@@ -31,44 +35,83 @@ if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
     end
   else
     device_id = node['aws']['ebs_volume']['data_volume']['device']
+    # Add logic to match device to :device_to_restore
+    # Also add logic if there is no match
   end
+
+  ec2_auth(aws['aws_access_key_id'], aws['aws_secret_access_key'])
+  @instance_id = get_instance_id
 
   original_volume_ids.each do |vol|
-    snap_ids << retrieve_snapshot_id(vol, true)
+    snap_ids << get_snapshot_id(vol, node['blockdevice_nativex']['restore'][:restore_point])
+    #sizes << @ec2.volumes[vol].size
   end
 
-  # Detach old volume
-  aws_ebs_volume "db_ebs_volume" do
-    aws_access_key aws['aws_access_key_id']
-    aws_secret_access_key aws['aws_secret_access_key']
+  xfs_filesystem('freeze')
+  mount node['blockdevice_nativex']['dir'] do
     device device_id
-    action [ :detach ]
+    action [:umount, :disable]
   end
 
-  # Create new ebs volume from snapshot and attach
-  aws_ebs_volume "db_ebs_volume_from_snapshot" do
-    aws_access_key aws['aws_access_key_id']
-    aws_secret_access_key aws['aws_secret_access_key']
-    # size 20
-    device device_id
-    snapshot_id snap_ids
-    action [ :create, :attach ]
+  if node['blockdevice_nativex']['ebs']['raid']
+  else
+    # Detach old volume
+    blockdevice_nativex_volume volume_id do
+      force true
+      action :detach
+    end
+    # original_volume_ids.each do |volume_id|
+    #   detach_volume(volume_id, true)
+    # end
+
+    # Create new ebs volume from snapshot and attach
+    if raid
+      aws_ebs_raid 'db_ebs_raid_from_snapshot' do
+        aws_access_key aws['aws_access_key_id']
+        aws_secret_access_key aws['aws_secret_access_key']
+        disk_size 20 # cant hardcode this value
+        disk_count 3
+        level 5
+        snapshots snap_ids
+      end
+    else
+      snap_id = snap_ids.first
+      new_volume_id = aws_ebs_volume 'db_ebs_volume_from_snapshot' do
+        aws_access_key aws['aws_access_key_id']
+        aws_secret_access_key aws['aws_secret_access_key']
+        size 20 # cant hardcode this value
+        device device_id
+        snapshot_id snap_id
+        most_recent_snapshot if node['blockdevice_nativex']['restore'][:restore_point] == :latest
+        ignore_failure true
+        action [ :create ] # was , :attach
+      end
+      blockdevice_nativex_volume new_volume_id do
+        instance_id @instance_id
+        device device_id
+        action :attach
+      end
+    end
+
+    mount node['blockdevice_nativex']['dir'] do
+      device device_id
+      fstype node['blockdevice_nativex']['filesystem']
+      options 'noatime'
+      action [:mount]
+    end
+    xfs_filesystem('unfreeze')
+
+    # Tag old volume for deletion
+    time = Time.now + (node['blockdevice_nativex']['restore'][:destroy_volumes_after]*60*60)
+    aws_resource_tag 'tag_data_volumes' do
+      aws_access_key aws['aws_access_key_id']
+      aws_secret_access_key aws['aws_secret_access_key']
+      resource_id original_volume_ids #can be a array
+      tags({:Destroy => true,
+            :DestructionTime => time.inspect})
+      action [:add, :update]
+    end
   end
 
-  # Tag old volume for deletion
-  aws_resource_tag 'tag_data_volumes' do
-    aws_access_key aws['aws_access_key_id']
-    aws_secret_access_key aws['aws_secret_access_key']
-    resource_id old_volume_id #can be a array
-    tags({:Destroy => true,
-          :DestructionDateTime => (DateTime + node['blockdevice_nativex']['restore']['destroy_volumes_after'].hours).to_datetime})
-    action [:add, :update]
-  end
-
-  # Delete volumes tag for deletion older then x hours or delete right away if y = true
-  if :Destroy && :DestructionDateTime < DateTime
-    # Destroy volume(s)
-    ## Maybe the could be put in the default recipe since restore_from_snapshot might not always be assigned. Further thinking,
-    ## maybe make this a resource that this recipe and the default recipe can access.
-  end
+  destroy_volumes
 end
