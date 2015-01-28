@@ -3,13 +3,12 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
 
   aws = Chef::EncryptedDataBagItem.load("credentials", "aws")
   include_recipe 'aws'
-  ::Chef::Recipe.send(:include, Nativex::Blockdevice::Instance)
-  ::Chef::Recipe.send(:include, Nativex::Blockdevice::Snapshots)
-  ::Chef::Recipe.send(:include, Nativex::Blockdevice::Volumes)
+  ::Chef::Recipe.send(:include, Nativex::Blockdevice::Helpers)
+  #::Chef::Recipe.send(:include, Nativex::Blockdevice::Volumes)
 
   original_volume_ids = node['aws']['ebs_volume'].to_s.scan(/vol-[a-zA-Z0-9]+/) # add logic to match device, maybe move in loop below
   device_id = nil
-  sizes = snap_ids = []
+  snaps = []
 
   raid = node['blockdevice_nativex']['ebs']['raid']
 
@@ -39,11 +38,12 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
     # Also add logic if there is no match
   end
 
-  ec2_auth(aws['aws_access_key_id'], aws['aws_secret_access_key'])
+  #@ec2 = ec2_auth(aws['aws_access_key_id'], aws['aws_secret_access_key'])
+  #raise "EC2 not authenticated." unless @ec2
   @instance_id = get_instance_id
 
-  original_volume_ids.each do |vol|
-    snap_ids << get_snapshot_id(vol, node['blockdevice_nativex']['restore'][:restore_point])
+  original_volume_ids.each do |volume|
+    snaps << get_snapshot_id(aws, volume, node['blockdevice_nativex']['restore'][:restore_point])
     #sizes << @ec2.volumes[vol].size
   end
 
@@ -56,30 +56,39 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
   if node['blockdevice_nativex']['ebs']['raid']
   else
     # Detach old volume
-    blockdevice_nativex_volume volume_id do
-      force true
-      action :detach
+    original_volume_ids.each do |volume_id|
+      blockdevice_nativex_volume volume_id do
+        access_key_id aws['aws_access_key_id']
+        secret_access_key aws['aws_secret_access_key']
+        force true
+        action :detach
+      end
     end
     # original_volume_ids.each do |volume_id|
     #   detach_volume(volume_id, true)
     # end
 
     # Create new ebs volume from snapshot and attach
+    volume_size = snaps.first.volume_size
     if raid
+      snap_ids = []
+      snaps.each do |s|
+        snap_ids << s.snapshot_id
+      end
       aws_ebs_raid 'db_ebs_raid_from_snapshot' do
         aws_access_key aws['aws_access_key_id']
         aws_secret_access_key aws['aws_secret_access_key']
-        disk_size 20 # cant hardcode this value
-        disk_count 3
-        level 5
+        disk_size volume_size
+        disk_count node['blockdevice_nativex']['ebs']['count']
+        level node['blockdevice_nativex']['ebs']['level']
         snapshots snap_ids
       end
     else
-      snap_id = snap_ids.first
+      snap_id = snaps.first.snapshot_id
       new_volume_id = aws_ebs_volume 'db_ebs_volume_from_snapshot' do
         aws_access_key aws['aws_access_key_id']
         aws_secret_access_key aws['aws_secret_access_key']
-        size 20 # cant hardcode this value
+        size volume_size
         device device_id
         snapshot_id snap_id
         most_recent_snapshot if node['blockdevice_nativex']['restore'][:restore_point] == :latest
@@ -87,6 +96,8 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
         action [ :create ] # was , :attach
       end
       blockdevice_nativex_volume new_volume_id do
+        access_key_id aws['aws_access_key_id']
+        secret_access_key aws['aws_secret_access_key']
         instance_id @instance_id
         device device_id
         action :attach
@@ -113,5 +124,10 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
     end
   end
 
-  destroy_volumes
+  blockdevice_nativex_volume original_volume_ids do # need to change lwrp to handle array
+    access_key_id aws['aws_access_key_id']
+    secret_access_key aws['aws_secret_access_key']
+    retention_check true
+    action :delete
+  end
 end
