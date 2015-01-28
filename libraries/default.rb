@@ -48,7 +48,10 @@ module Nativex
         #snapshot.first
       end
 
-
+      def volume_exists(creds, volume_id)
+        ec2 = ec2_auth(creds['aws_access_key_id'], creds['aws_secret_access_key'])
+        ec2.volumes[volume_id].exists?
+      end
 
       def xfs_filesystem(action)
         if node['blockdevice_nativex']['filesystem'] == 'xfs'
@@ -59,18 +62,6 @@ module Nativex
       end
 
     end
-
-    # module Volumes
-    #   def detach_volume(volume_id = '', force = false)
-    #     #converge_by("Detaching volume where id=#{volume_id}#{force ? ' forcefully' : ''}") do
-    #       volume = @ec2.volumes[volume_id]
-    #       volume.attachments.each do |attachment|
-    #         attachment.delete(:force => force)
-    #       end
-    #       sleep 1 until volume.status == :available
-    #     #end
-    #   end
-    # end
   end
 end
 

@@ -14,7 +14,7 @@ attribute :volume_id,             :kind_of => String, :name_attribute => true
 attribute :force,                 :kind_of => [TrueClass, FalseClass], :default => false
 attribute :device,                :kind_of => String
 attribute :instance_id,           :kind_of => String
-attribute :retention_check,       :kind_of => String, :name_attribute => false
+attribute :retention_check,       :kind_of => [TrueClass, FalseClass], :default => false
 
 def initialize(*args)
   super

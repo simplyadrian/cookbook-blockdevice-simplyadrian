@@ -17,12 +17,15 @@ Recipes
 Calls xfs::default if the filesystem will be xfs
 also calls blockdevice-nativex::volumes
 
-#### snapshots.rb
+#### snapshots_take.rb
 Snapshots the instance EBS volume on each chef client run and prunes old snapshots automatically. Number of snapshots
 to maintain can be specified in a cookbook attribute. Handles freezing/unfreezing EBS volume.
 
 Note: Currently the snapshots recipe will not snapshot an instance on the first chef-client run because ohai ebs
 attributes are on available. It will work on subsequent runs.
+
+#### snapshots_restore.rb
+Restores an EBS volume from snapshot.
 
 #### tags.rb
 Tags EBS volumes with their volume IDs.
@@ -96,6 +99,26 @@ Attributes
   </tr>
 </table>
 
+Resources and Providers
+-----
+
+## volume.rb
+Actions:
+* `attach` - attaches a specified volume to specified instance
+* `detach` - detaches a volume from all instances
+* `delete` - deletes a volume
+
+Attribute Parameters:
+* `access_key_id`, secret_access_key - passed to Nativex::Blockdevice::Helpers to authenticate to AWS
+* `volume_id` - Default parameter. ID of EBS volume
+* `force` - Works with action :detach to force the operation
+* `device` - Local block device where volume is attached/needs to be attached
+* `instance_id` - ID of instance can be grabbed using Nativex::Blockdevice::Helpers get_instance_id
+* `retention_check` - Used when deleting volumes to check that resource tag :Destroy is set to true and :DestructionTime has
+lapsed
+
+See usage examples in snapshots_restore.rb
+
 Usage
 -----
 Include `blockdevice-nativex` in your node's `run_list`:
@@ -136,3 +159,17 @@ provisioning EBS volumes on HVM instances.
 License and Authors
 -------------------
 Authors: Adrian Herrera, Jesse Hauf, Brett Stime
+
+Copyright 2014-2015, NativeX Holdings LLC.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.

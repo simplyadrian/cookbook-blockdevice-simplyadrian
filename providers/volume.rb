@@ -1,6 +1,5 @@
-::Chef::Recipe.send(:include, Nativex::Blockdevice::Helpers)
+include Nativex::Blockdevice::Helpers
 
-# Support whyrun
 def whyrun_supported?
   true
 end
@@ -28,13 +27,12 @@ action :delete do
     volume = ec2_auth.volumes[new_resource.volume_id]
     destroy = false
     if new_resource.retention_check
-        # Delete volumes tag for deletion older then x hours or delete right away if y = true
-        if :Destroy && :DestructionTime < Time
-          # Destroy volume(s)
-          ## Maybe the could be put in the default recipe since restore_from_snapshot might not always be assigned. Further thinking,
-          ## maybe make this a resource that this recipe and the default recipe can access.
-          destroy = true
-        end
+      tags = volume.tags.to_h
+      if tags[:Destroy] && tags[:DestructionTime] < Time
+        destroy = true
+      else
+        raise "Retention check is set to true but volume with id=#{new_resource.volume_id} is missing :Destroy and :DestructionTime tags"
+      end
     else
       destroy = true
     end
