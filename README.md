@@ -27,6 +27,15 @@ attributes are on available. It will work on subsequent runs.
 #### snapshots_restore.rb
 Restores an EBS volume from snapshot.
 
+Note regarding device names (quote from AWS):
+"Depending on the block device driver of the kernel, the device might be attached with a different name than what
+you specify. For example, if you specify a device name of /dev/sdh, your device might be renamed /dev/xvdh or /dev/hdh
+by the kernel; in most cases, the trailing letter remains the same. In some versions of Red Hat Enterprise Linux (and
+its variants, such as CentOS), even the trailing letter might also change (where /dev/sda could become /dev/xvde). In
+these cases, each device name trailing letter is incremented the same number of times. For example, /dev/sdb would
+become /dev/xvdf and /dev/sdc would become /dev/xvdg. Amazon Linux AMIs create a symbolic link with the name you specify
+at launch that points to the renamed device path, but other AMIs might behave differently."
+
 #### tags.rb
 Tags EBS volumes with their volume IDs.
 

@@ -49,7 +49,7 @@ if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
     ruby_block "sleeping_data_volume" do
       block do
         timeout = 0
-        until File.blockdev?(device_id) || timeout == 1000
+        until File.blockdev?(device_id) || timeout >= default['blockdevice_nativex']['max_timeout']
           Chef::Log.debug("device #{device_id} not ready - sleeping 10s")
           timeout += 10
           sleep 10

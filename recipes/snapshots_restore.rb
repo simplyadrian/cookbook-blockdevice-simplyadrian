@@ -4,52 +4,98 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
   aws = Chef::EncryptedDataBagItem.load("credentials", "aws")
   include_recipe 'aws'
   ::Chef::Recipe.send(:include, Nativex::Blockdevice::Helpers)
-  #::Chef::Recipe.send(:include, Nativex::Blockdevice::Volumes)
 
-  original_volume_ids = node['aws']['ebs_volume'].to_s.scan(/vol-[a-zA-Z0-9]+/) # add logic to match id to device, maybe move in loop below
-  device_id = nil
-  snaps = []
+  final_volume_ids = original_volume_ids = node['aws']['ebs_volume'].to_s.scan(/vol-[a-zA-Z0-9]+/)
 
   raid = node['blockdevice_nativex']['ebs']['raid']
+  device_to_restore = node['blockdevice_nativex']['restore'][:device_to_restore]
+  valid_aws_device_names = snaps = device_ids = []
+  device_id = glob_regex = nil
 
-  # Find volume based on attribute otherwise take the first ebs volume
+  # Do I know how to find this device?
   if raid
-    device_to_restore = node['blockdevice_nativex']['restore'][:device_to_restore]
-    device_ids = nil
-    Dir.glob('/dev/md[0-9]*').each do |dir| device_ids << dir end
-    if device_ids.length == 1 || (device_ids > 1 && device_to_restore.blank?)
-      device_id = device_ids[0]
-    elsif device_ids > 1
-      if device_to_restore =~ '/dev/md[0-9]*'
-        begin
-          device_id = device_ids.index(device_to_restore)
-        rescue
-          Chef::Log.error("Invalid device specified (#{device_to_restore}). Found: #{device_ids.inspect}")
-        end
-      else
-        Chef::Log.error("Invalid device specified (#{device_to_restore}). Found: #{device_ids.inspect}")
-      end
+    if device_to_restore =~ %r'/dev/md[0-9]*' || device_to_restore.blank?
+      glob_regex = '/dev/md[0-9]*'
     else
-      Chef::Log.error('RAID specified but no RAID device found.')
+      Chef::Log.error(
+          'Invalid device specified. raid=true but you provided: '\
+          "(#{device_to_restore}). I am looking for: '/dev/md[0-9]*'"
+      )
+    end
+  elsif device_to_restore =~ %r'/dev/xvd[b-r]' || device_to_restore.blank?
+    glob_regex = '/dev/xvd[b-r]'
+  elsif device_to_restore =~ %r'/dev/sd[b-r]'
+    glob_regex = '/dev/sd[b-r]'
+  else
+    Chef::Log.error(
+        "I dont know about that device name or the device name is invalid. device_to_restore=#{device_to_restore}"\
+        'I will still try to find it.'\
+    )
+    glob_regex = device_to_restore
+  end
+
+  # Find mounted devices
+  Dir.glob(glob_regex).each do |dir| device_ids << dir end
+
+  if device_ids.length == 1 || (device_ids > 1 && device_to_restore.blank?)
+    device_id = device_ids[0]
+  elsif device_ids > 1
+    begin
+      device_id = device_ids.index(device_to_restore)
+    rescue
+      Chef::Log.error("Invalid device specified (#{device_to_restore}). Found: #{device_ids.inspect}")
     end
   else
-    device_id = node['aws']['ebs_volume']['data_volume']['device']
-    # Add logic to match device to :device_to_restore
-    # Also add logic if there is no match
+    Chef::Log.error("Device specified but no device found. You specified: #{device_to_restore}")
   end
+  #raise "Device: #{device_id}" if true
 
-  #@ec2 = ec2_auth(aws['aws_access_key_id'], aws['aws_secret_access_key'])
-  #raise "EC2 not authenticated." unless @ec2
-
-  @instance_id = get_instance_id
-
+  # Verify the correct device
   original_volume_ids.each do |volume|
-    if volume_exists(aws, volume)
+    if original_volume_ids.length > 1 || device_ids.length > 1
+      volume_to_device_match = false
+      possible_match = ''
+      node['aws']['ebs_volume'].each_line do |line|
+        line.to_s.scan(volume) ? break : possible_match = line
+      end
+      if possible_match.to_s.scan(/\/dev\/\w\w\w\w?/)
+        if possible_match.to_s.scan(device_id)
+          volume_to_device_match = true # TODO: Need to use this somewhere
+        else
+          final_volume_ids.delete(volume)
+          next
+        end
+      else
+        offset = device_offset(aws, original_volume_ids, device_ids)
+        aws_device_name = get_volume_device(aws, volume)
+        letter = aws_device_name[-1,1]
+        letters = ('a'..'z').to_a
+        offset.abs.times do
+          offset > 0 ? letter.next! : letter = letters[letters.index(letter)-1]
+        end
+        if letter == device_id[-1,1]
+          volume_to_device_match = true # TODO: Need to use this somewhere
+        else
+          final_volume_ids.delete(volume)
+          next
+          #Chef::Log.error('Cannot match aws device id to local device id.')
+        end
+      end
+    end
+    #aws_device_name = get_volume_device(aws, volume)
+    if volume_exists(aws, volume) #&& valid_aws_device_names.index(aws_device_name) # TODO: Fix to work with RAID
       snaps << get_snapshot_id(aws, volume, node['blockdevice_nativex']['restore'][:restore_point])
     else
-      original_volume_ids.delete(volume)
+      final_volume_ids.delete(volume)
     end
   end
+
+  # if raid
+  #   # TODO: Find sub devices under md0
+  #   raid_devices << 'x'
+  # end
+
+  #@instance_id = get_instance_id
 
   xfs_filesystem('freeze')
 
@@ -59,7 +105,7 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
   end
 
   # Detach old volume(s)
-  original_volume_ids.each do |volume_id|
+  final_volume_ids.each do |volume_id|
     blockdevice_nativex_volume volume_id do
       access_key_id aws['aws_access_key_id']
       secret_access_key aws['aws_secret_access_key']
@@ -75,7 +121,7 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
     snaps.each do |s|
       snap_ids << s.snapshot_id
     end
-    aws_ebs_raid 'db_ebs_raid_from_snapshot' do
+    aws_ebs_raid 'restored_raid_volume' do
       aws_access_key aws['aws_access_key_id']
       aws_secret_access_key aws['aws_secret_access_key']
       disk_size volume_size
@@ -84,8 +130,10 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
       snapshots snap_ids
     end
   else
+    new_volume_precheck = get_volume_id(aws, 'snap-a767ae2a') # TODO: WAS snap_id
+
     snap_id = snaps.first.snapshot_id
-    new_volume_id = aws_ebs_volume 'db_ebs_volume_from_snapshot' do
+    aws_ebs_volume 'restored_data_volume' do
       aws_access_key aws['aws_access_key_id']
       aws_secret_access_key aws['aws_secret_access_key']
       size volume_size
@@ -93,14 +141,19 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
       snapshot_id snap_id
       most_recent_snapshot if node['blockdevice_nativex']['restore'][:restore_point] == :latest
       ignore_failure true
-      action :create # was , :attach
+      action :create
+      not_if { new_volume_precheck[:status] == 'available' }
     end
-    blockdevice_nativex_volume new_volume_id do
+
+    new_volume_id = get_volume_id(aws, 'snap-a767ae2a') # TODO: WAS snap_id
+
+    blockdevice_nativex_volume new_volume_id[:id] do
       access_key_id aws['aws_access_key_id']
       secret_access_key aws['aws_secret_access_key']
-      instance_id @instance_id
+      #instance_id @instance_id
       device device_id
       action :attach
+      only_if { new_volume_id[:status] == 'available' }
     end
   end
 
@@ -108,7 +161,7 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
     device device_id
     fstype node['blockdevice_nativex']['filesystem']
     options 'noatime'
-    action [:mount]
+    action :mount
   end
 
   xfs_filesystem('unfreeze')
@@ -124,10 +177,10 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
     action [:add, :update]
   end
 
-  blockdevice_nativex_volume original_volume_ids do # need to change lwrp to handle array
-    access_key_id aws['aws_access_key_id']
-    secret_access_key aws['aws_secret_access_key']
-    retention_check true
-    action :delete
-  end
+  # blockdevice_nativex_volume original_volume_ids do # TODO: need to change lwrp to handle array
+  #   access_key_id aws['aws_access_key_id']
+  #   secret_access_key aws['aws_secret_access_key']
+  #   retention_check true
+  #   action :delete
+  # end
 end

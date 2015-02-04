@@ -8,7 +8,7 @@ module Nativex
         rescue LoadError
           Chef::Log.error("Missing gem 'aws-sdk'. Use the default recipe to install it first.")
         end
-        AWS::EC2.new(:access_key_id => id, :secret_access_key => secret) #, :region => get_region (this dint work) TODO: Restrict to region
+        @ec2_auth ||= AWS::EC2.new(:access_key_id => id, :secret_access_key => secret) #, :region => get_region (this dint work) TODO: Restrict to region
       end
 
       def get_instance_id
@@ -30,12 +30,6 @@ module Nativex
           ec2.client.describe_snapshots(filters: [{name: 'volume-id', values: [volume_id] }]).snapshot_set.each do |snap|
             snapshot = snap if snapshot.nil? || snap.start_time > snapshot.start_time
           end
-          # snapshots = ec2.client.describe_snapshots#(filters: [{name: 'volume-id', values: [volume_id] }]).each do |snap|
-          # #ec2.snapshots.filter('volume-id', volume_id).each do |snap|
-          # snapshots.each do |snap|
-          #   next unless snap[:volume_id] == volume_id
-          #   snapshot = snap if snapshot.nil? || snap[:start_time] > snapshot[:start_time]
-          # end
         else
           #TODO: if not :latest
           # snapshots = ec2.snapshots.filter('volume-id', volume_id).filter('tag:restore_point', restore_point)
@@ -44,13 +38,34 @@ module Nativex
         end
         #raise "output: #{snapshot.snapshot_id.nil?}" if true # <-- this works correctly
         #raise 'Cannot find valid snapshot id.' unless snapshot.snapshot_id.nil? # <-- this does not work correctly
-        snapshot #= snapshot.id.to_s.scan(/snap-[a-zA-Z0-9]+/)
-        #snapshot.first
+        snapshot
+      end
+
+      # Returns hash with volume_id and state based off provided snapshot_id
+      def get_volume_id(creds, snapshot_id)
+        ec2 = ec2_auth(creds['aws_access_key_id'], creds['aws_secret_access_key'])
+        volume = nil
+        ec2.client.describe_volumes(filters: [{name: 'snapshot-id', values: [snapshot_id] }]).volume_set.each do |vol|
+          volume = { :id => vol.volume_id, :status => vol.status }
+        end
+        volume
       end
 
       def volume_exists(creds, volume_id)
         ec2 = ec2_auth(creds['aws_access_key_id'], creds['aws_secret_access_key'])
         ec2.volumes[volume_id].exists?
+      end
+
+      def get_volume_device(creds, volume_id)
+        ec2 = ec2_auth(creds['aws_access_key_id'], creds['aws_secret_access_key'])
+        device = ''
+        ec2.client.describe_volumes(filters: [{name: 'volume-id', values: [volume_id] }]).volume_set.each do |vol|
+          vol.attachment_set.each do |attachment|
+            next unless attachment.instance_id == get_instance_id
+            device = attachment.device
+          end
+        end
+        device
       end
 
       def xfs_filesystem(action)
@@ -59,6 +74,38 @@ module Nativex
             command "xfs_freeze -#{action[0,1]} #{node['blockdevice_nativex']['dir']}"
           end
         end
+      end
+
+      def device_offset(creds, volume_ids, device_ids)
+        @device_offset ||= find_device_offset(creds, volume_ids, device_ids)
+      end
+
+      def find_device_offset(creds, volume_ids, device_ids)
+        aws_device_iterators = local_device_iterators = [] #= aws_device_names = []
+        device_ids.each do |id|
+          local_device_iterators << id[-1,1]
+        end
+        local_device_iterators.sort!
+
+        volume_ids.each do |volume|
+          device_name = get_volume_device(creds, volume)
+          #aws_device_names << device_name
+          aws_device_iterators << device_name[-1,1]
+        end
+        aws_device_iterators.sort!
+
+        #Check for the offset
+        device_offset = 0
+        if local_device_iterators.first == aws_device_iterators.first
+          # No offset
+        elsif local_device_iterators.first < aws_device_iterators.first
+          (local_device_iterators.first ... aws_device_iterators.first).each do device_offset += 1 end
+        elsif local_device_iterators.first > aws_device_iterators.first
+          (aws_device_iterators.first ... local_device_iterators.first).each do device_offset -= 1 end
+        else
+          Chef::Log.error('Invalid device specified.')
+        end
+        device_offset
       end
 
     end
