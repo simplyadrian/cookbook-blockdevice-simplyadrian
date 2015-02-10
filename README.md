@@ -27,6 +27,14 @@ attributes are on available. It will work on subsequent runs.
 #### snapshots_restore.rb
 Restores an EBS volume from snapshot.
 
+To best ensure this recipe can match volumes to local devices the ebs_volume attribute data structure should look
+like below for each data volume:
+
+ebs_volume:
+  data_volume:
+    device:    /dev/xvdf
+    volume_id: vol-xxxxxxxx
+
 Note regarding device names (quote from AWS):
 "Depending on the block device driver of the kernel, the device might be attached with a different name than what
 you specify. For example, if you specify a device name of /dev/sdh, your device might be renamed /dev/xvdh or /dev/hdh

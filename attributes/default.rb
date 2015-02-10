@@ -5,6 +5,7 @@ default['blockdevice_nativex']['recurse_permissions'] = true
 default['blockdevice_nativex']['filesystem'] = "ext4"
 default['blockdevice_nativex']['max_timeout'] = 180 # seconds, max timeout for volume operations
 default['blockdevice_nativex']['snapshots_to_keep'] = 5
+#default['blockdevice_nativex']['volumes_attribute'] = node[aws][ebs_volume] # indicate in help what sub structure should look like
 # default['blockdevice_nativex']['snapshots_to_keep'] = {
 #     :hourly => 8,
 #     :daily => 7,

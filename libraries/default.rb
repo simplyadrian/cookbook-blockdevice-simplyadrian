@@ -56,7 +56,7 @@ module Nativex
         ec2.volumes[volume_id].exists?
       end
 
-      def get_volume_device(creds, volume_id)
+      def get_volume_device(creds, volume_id) # returns aws device name of volume, returns nil if volume does not exist
         ec2 = ec2_auth(creds['aws_access_key_id'], creds['aws_secret_access_key'])
         device = ''
         ec2.client.describe_volumes(filters: [{name: 'volume-id', values: [volume_id] }]).volume_set.each do |vol|
@@ -81,17 +81,18 @@ module Nativex
       end
 
       def find_device_offset(creds, volume_ids, device_ids)
-        aws_device_iterators = local_device_iterators = [] #= aws_device_names = []
+        aws_device_iterators = local_device_iterators = []
         device_ids.each do |id|
-          local_device_iterators << id[-1,1]
+          local_device_iterators << id.to_s[-1,1]
         end
         local_device_iterators.sort!
 
         volume_ids.each do |volume|
+          next unless volume_exists(creds, volume)
           device_name = get_volume_device(creds, volume)
-          #aws_device_names << device_name
-          aws_device_iterators << device_name[-1,1]
+          aws_device_iterators << device_name[-1,1] unless device_name.empty?
         end
+        aws_device_iterators.delete('>')
         aws_device_iterators.sort!
 
         #Check for the offset
