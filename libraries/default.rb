@@ -19,7 +19,7 @@ module Nativex
 
       def get_region
         region = open('http://169.254.169.254/latest/meta-data/placement/availability-zone/', options = {:proxy => false}){|f| f.gets}
-        raise "Cannot find region." unless region
+        raise 'Cannot find region.' unless region
         region
       end
 
@@ -41,19 +41,19 @@ module Nativex
         snapshot
       end
 
-      # Returns hash with volume_id and state based off provided snapshot_id
-      def get_volume_id(creds, snapshot_id)
-        ec2 = ec2_auth(creds['aws_access_key_id'], creds['aws_secret_access_key'])
-        volume = nil
-        ec2.client.describe_volumes(filters: [{name: 'snapshot-id', values: [snapshot_id] }]).volume_set.each do |vol|
-          volume = { :id => vol.volume_id, :status => vol.status }
-        end
-        volume
-      end
-
       def volume_exists(creds, volume_id)
         ec2 = ec2_auth(creds['aws_access_key_id'], creds['aws_secret_access_key'])
         ec2.volumes[volume_id].exists?
+      end
+
+      # Returns hash with volume_id and state based off provided snapshot_id
+      def get_volume_id(creds, snapshot_id)
+        ec2 = ec2_auth(creds['aws_access_key_id'], creds['aws_secret_access_key'])
+        ebs_volume_id = Hash.new
+        ec2.client.describe_volumes(filters: [{name: 'snapshot-id', values: [snapshot_id] }]).volume_set.each do |vol|
+          ebs_volume_id = { :id => vol.volume_id, :status => vol.status }
+        end
+        ebs_volume_id
       end
 
       def get_volume_device(creds, volume_id) # returns aws device name of volume, returns nil if volume does not exist

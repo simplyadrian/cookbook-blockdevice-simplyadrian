@@ -9,8 +9,11 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
 
   raid = node['blockdevice_nativex']['ebs']['raid']
   device_to_restore = node['blockdevice_nativex']['restore'][:device_to_restore]
-  valid_aws_device_names = snaps = device_ids = []
-  device_id = glob_regex = nil
+  valid_aws_device_names = []
+  snaps = []
+  device_ids = []
+  device_id = nil
+  glob_regex = nil
   final_volume_ids = {}
 
       # Do I know how to find this device?
@@ -38,9 +41,9 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
   # Find mounted devices
   Dir.glob(glob_regex).each do |dir| device_ids << dir end
 
-  if device_ids.length == 1 || (device_ids > 1 && device_to_restore.blank?)
+  if device_ids.length == 1 || (device_ids.count > 1 && device_to_restore.blank?)
     device_id = device_ids[0]
-  elsif device_ids > 1
+  elsif device_ids.count > 1
     begin
       device_id = device_ids.index(device_to_restore)
     rescue
@@ -48,6 +51,7 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
     end
   else
     Chef::Log.error("Device specified but no device found. You specified: #{device_to_restore}")
+    device_id = device_to_restore
   end
 
   # Match volume id to device
@@ -65,7 +69,7 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
           break
         end
       end
-      if possible_match =~ /\/dev\/\w\w\w\w?/ # commenting this out removes the "too_complex" statement
+      if possible_match =~ /\/dev\/\w\w\w\w?/
         unless possible_match =~ /#{device_id}/
           Chef::Log.info("volume_id=#{original_volume_id} does not match device to restore.")
           next
@@ -89,30 +93,27 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
     snaps << get_snapshot_id(aws, original_volume_id, node['blockdevice_nativex']['restore'][:restore_point])
   end
 
-
   # if raid
   #   # TODO: Find sub devices under md0
   #   raid_devices << 'x'
   # end
 
-  #@instance_id = get_instance_id
-
   xfs_filesystem('freeze')
 
-  mount node['blockdevice_nativex']['dir'] do
-    device device_id
-    action [:umount, :disable]
-  end
-
-  # Detach old volume(s)
-  final_volume_ids.each do |volume_id,snapshot_id|
-    blockdevice_nativex_volume volume_id do
-      access_key_id aws['aws_access_key_id']
-      secret_access_key aws['aws_secret_access_key']
-      force true
-      action :detach
-    end
-  end
+  # mount node['blockdevice_nativex']['dir'] do # TODO: add only if
+  #   device device_id
+  #   action :umount # was: , :disable]
+  # end
+  #
+  # # Detach old volume(s)
+  # final_volume_ids.each do |volume_id,snapshot_id|
+  #   blockdevice_nativex_volume volume_id do # TODO: add only if
+  #     access_key_id aws['aws_access_key_id']
+  #     secret_access_key aws['aws_secret_access_key']
+  #     force true
+  #     action :detach
+  #   end
+  # end
 
   # Create new ebs volume from snapshot and attach
   volume_size = snaps.first.volume_size
@@ -130,7 +131,7 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
       snapshots snap_ids
     end
   else
-    snap_id = snaps.first.snapshot_id
+    snap_id = 'snap-cfec8541' # TODO: was: snaps.first.snapshot_id
     new_volume_precheck = get_volume_id(aws, snap_id)
 
     aws_ebs_volume 'restored_data_volume' do
@@ -147,22 +148,64 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
 
     new_volume_id = get_volume_id(aws, snap_id)
 
-    blockdevice_nativex_volume new_volume_id[:id] do
-      access_key_id aws['aws_access_key_id']
-      secret_access_key aws['aws_secret_access_key']
-      #instance_id @instance_id
-      device device_id
-      action :attach
+    ruby_block 'attach_restored_volume' do
+      block do
+        attach_volume_lwrp = Chef::Resource::BlockdeviceNativexVolume.new(new_volume_id[:id], run_context)
+        attach_volume_lwrp.access_key_id(aws['aws_access_key_id'])
+        attach_volume_lwrp.secret_access_key(aws['aws_secret_access_key'])
+        attach_volume_lwrp.device(device_id)
+        attach_volume_lwrp.run_action(:attach)
+      end
+      action :run
       only_if { new_volume_id[:status] == 'available' }
     end
+
+    # ruby_block 'attach_restored_volume' do
+    #   block do
+    #     blockdevice_nativex_volume new_volume_id[:id] do
+    #       access_key_id aws['aws_access_key_id']
+    #       secret_access_key aws['aws_secret_access_key']
+    #       device device_id
+    #       action :attach
+    #       only_if { new_volume_id[:status] == 'available' }
+    #     end
+    #   end
+    #   action :run
+    # end
   end
 
-  mount node['blockdevice_nativex']['dir'] do
-    device device_id
-    fstype node['blockdevice_nativex']['filesystem']
-    options 'noatime'
-    action :mount
-  end
+  # ruby_block 'waiting_for_volume_to_attach' do
+  #   block do
+  #     attaching = 0
+  #     until new_volume_id[:status] == 'in-use'
+  #       if attaching > 180
+  #         raise "#{new_volume_id[:id]} has been in the attaching state too long. Something is wrong."
+  #       end
+  #       sleep 5
+  #       new_volume_id = get_volume_id(aws, snap_id)
+  #       attaching += 5
+  #     end
+  #   end
+  # end
+
+  new_volume_id = get_volume_id(aws, snap_id)
+
+  # mount node['blockdevice_nativex']['dir'] do
+  #   device device_id
+  #   #fstype node['blockdevice_nativex']['filesystem']
+  #   options 'noatime'
+  #   action :mount
+  #   only_if { new_volume_id[:status] == 'in-use' }
+  #   ignore_failure true
+  # end
+
+  # execute 'mount_restored_volume' do
+  #   #-t #{node['blockdevice_nativex']['filesystem']}
+  #   command "mount #{device_id} #{node['blockdevice_nativex']['dir']} -o noatime"
+  #   timeout 180
+  #   only_if { new_volume_id[:status] == 'in-use' }
+  #   ignore_failure true
+  # end
 
   xfs_filesystem('unfreeze')
 
@@ -177,10 +220,13 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
     action [:add, :update]
   end
 
-  # blockdevice_nativex_volume original_volume_ids do # TODO: need to change lwrp to handle array
-  #   access_key_id aws['aws_access_key_id']
-  #   secret_access_key aws['aws_secret_access_key']
-  #   retention_check true
-  #   action :delete
+  # # Delete old volumes if they are ready for deletion
+  # original_volume_ids.each do |original_volume_id|
+  #   blockdevice_nativex_volume original_volume_id do
+  #     access_key_id aws['aws_access_key_id']
+  #     secret_access_key aws['aws_secret_access_key']
+  #     retention_check true
+  #     action :delete
+  #   end
   # end
 end

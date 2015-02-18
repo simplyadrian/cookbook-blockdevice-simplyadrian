@@ -16,7 +16,7 @@ end
 
 action :attach do
   instance_id = get_instance_id
-  converge_by("attach volume where id=#{new_resource.volume_id} to instance id=#{instance_id}") do
+  converge_by("attach volume id=#{new_resource.volume_id} to instance id=#{instance_id}") do
     volume = ec2_auth.volumes[new_resource.volume_id]
     attachment = volume.attach_to(ec2_auth.instances[instance_id], new_resource.device)
     sleep 1 until attachment.status != :attaching
