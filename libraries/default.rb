@@ -4,11 +4,11 @@ module Nativex
 
       def ec2_auth(id = new_resource.access_key_id, secret = new_resource.secret_access_key)
         begin
-          require 'aws-sdk'
+          require 'aws-sdk-v1'
         rescue LoadError
-          Chef::Log.error("Missing gem 'aws-sdk'. Use the default recipe to install it first.")
+          Chef::Log.error("Missing gem 'aws-sdk-v1'. Use the default recipe to install it first.")
         end
-        @ec2_auth ||= AWS::EC2.new(:access_key_id => id, :secret_access_key => secret) #, :region => get_region (this dint work) TODO: Restrict to region
+        @ec2_auth ||= AWS::EC2.new(:access_key_id => id, :secret_access_key => secret)#, :region => get_region)
       end
 
       def get_instance_id
@@ -44,6 +44,18 @@ module Nativex
       def volume_exists(creds, volume_id)
         ec2 = ec2_auth(creds['aws_access_key_id'], creds['aws_secret_access_key'])
         ec2.volumes[volume_id].exists?
+        # volume_status = ec2.client.describe_volume_status(volume_ids: [volume_id])
+        # raise "#{volume_status[:status]}" if true
+        # if volume_status[:status] == 'ok'
+        #   return_value = true
+        # elsif volume_status[:status] == 'insufficient-data'
+        #   raise "Volume exists but insufficient data received when querying volume id=#{volume_id}. Retry request."
+        # elsif volume_status[:status] == 'impaired' || volume_status[:status] == 'warning'
+        #   raise "Volume exists but volume_status=#{volume_status[:status]}. Details: #{volume_status[:details][:name]}, #{volume_status[:details][:status]}"
+        # else
+        #   return_value = false
+        # end
+        # raise "#{return_value}" if true
       end
 
       # Returns hash with volume_id and state based off provided snapshot_id
@@ -66,6 +78,15 @@ module Nativex
           end
         end
         device
+      end
+
+      def get_volume_status(creds, volume_id)
+        ec2 = ec2_auth(creds['aws_access_key_id'], creds['aws_secret_access_key'])
+        ebs_volume_id = Hash.new
+        ec2.client.describe_volumes(filters: [{name: 'volume-id', values: [volume_id] }]).volume_set.each do |vol|
+          ebs_volume_id = { :id => vol.volume_id, :status => vol.status }
+        end
+        ebs_volume_id
       end
 
       def xfs_filesystem(action)
