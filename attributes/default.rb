@@ -15,7 +15,7 @@ default['blockdevice_nativex']['snapshots_to_keep'] = 5
 default['blockdevice_nativex']['restore'] = {
     :take_action => true, # wheter or not to take action during chef run
     :destroy_volumes_after => 0, # hours, set to 0 for immediate destruction
-    :device_to_restore => '/dev/xvdg', # id of device to restore, if blank it will restore the first device found
+    :device_to_restore => '/dev/xvdb', # id of device to restore, if blank it will restore the first device found
     :restore_point => :latest, # valid options :latest :hourly :daily :weekly :monthly
     :restore_point_offset => 0 # # Example: if restore_point is set to daily and restore_point is set to -1 it will restore to :latest daily -1. Set to 0 to choose the latest
     # restore date, pick closest snapshot?

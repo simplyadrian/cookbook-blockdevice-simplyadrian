@@ -6,14 +6,14 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
   ::Chef::Recipe.send(:include, Nativex::Blockdevice::Helpers)
 
   original_volume_ids = node['aws']['ebs_volume'].to_s.scan(/vol-[a-zA-Z0-9]+/)
-
   raid = node['blockdevice_nativex']['ebs']['raid']
   device_to_restore = node['blockdevice_nativex']['restore'][:device_to_restore]
-  valid_aws_device_names = []
-  snaps = []
+  node.set['blockdevice_nativex']['restore_session'] ||= {} unless
+      node['blockdevice_nativex'].attribute?('restore_session')
   device_ids = []
   device_id = nil
   glob_regex = nil
+  snaps = {}
   final_volume_ids = {}
 
   # Do I know how to find this device?
@@ -54,47 +54,58 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
     device_id = device_to_restore
   end
 
-  # Dont run twice for the same device
-  File.new('/root/snapshots_restore', 'w+') unless File.exist?('/root/snapshots_restore')
-  unless File.readlines('/root/snapshots_restore').grep(/#{device_id}/).size > 0
+  # Dont restore more than once for the same device, remove the deivce from restored_devices to restore it again
+  unless node['blockdevice_nativex']['restore_session'].attribute?(:restored_devices) &&
+      node['blockdevice_nativex']['restore_session'][:restored_devices].include?(device_id)
 
     # Match volume id to device
-    volume_attributes = node['aws']['ebs_volume']
-    original_volume_ids.each do |original_volume_id|
-      unless volume_exists(aws, original_volume_id)
-        Chef::Log.info("volume_id=#{original_volume_id} does not exist. Please consider removing its node attribute.")
-        next
-      end
-      if original_volume_ids.length > 1 || device_ids.length > 1
-        possible_match = ''
-        volume_attributes.each do |label,hash|
-          if hash['volume_id'] == original_volume_id
-            possible_match = hash['device']
-            break
+    if node['blockdevice_nativex']['restore_session'].attribute?(:in_progress) &&
+        node['blockdevice_nativex']['restore_session'][:in_progress]
+      snaps = node['blockdevice_nativex']['restore_session'][:snaps]
+      final_volume_ids = node['blockdevice_nativex']['restore_session'][:final_volume_ids]
+    else
+      volume_attributes = node['aws']['ebs_volume']
+      original_volume_ids.each do |original_volume_id|
+        unless volume_exists(aws, original_volume_id)
+          Chef::Log.info("volume_id=#{original_volume_id} does not exist. Please consider removing its node attribute.")
+          next
+        end
+        if original_volume_ids.length > 1 || device_ids.length > 1
+          possible_match = ''
+          volume_attributes.each do |label,hash|
+            if hash['volume_id'] == original_volume_id
+              possible_match = hash['device']
+              break
+            end
+          end
+          if possible_match =~ /\/dev\/\w\w\w\w?/
+            unless possible_match =~ /#{device_id}/
+              Chef::Log.info("volume_id=#{original_volume_id} does not match device to restore.")
+              next
+            end
+          else
+            offset = device_offset(aws, original_volume_ids, device_ids)
+            aws_device_name = get_volume_device(aws, original_volume_id)
+            letter = aws_device_name[-1,1]
+            letters = ('a'..'z').to_a
+            offset.abs.times do
+              offset > 0 ? letter.next! : letter = letters[letters.index(letter)-1]
+            end
+            unless letter == device_id[-1,1]
+              Chef::Log.info("volume_id=#{original_volume_id} does not match device to restore.")
+              next
+            end
           end
         end
-        if possible_match =~ /\/dev\/\w\w\w\w?/
-          unless possible_match =~ /#{device_id}/
-            Chef::Log.info("volume_id=#{original_volume_id} does not match device to restore.")
-            next
-          end
-        else
-          offset = device_offset(aws, original_volume_ids, device_ids)
-          aws_device_name = get_volume_device(aws, original_volume_id)
-          letter = aws_device_name[-1,1]
-          letters = ('a'..'z').to_a
-          offset.abs.times do
-            offset > 0 ? letter.next! : letter = letters[letters.index(letter)-1]
-          end
-          unless letter == device_id[-1,1]
-            Chef::Log.info("volume_id=#{original_volume_id} does not match device to restore.")
-            next
-          end
-        end
+        snapshot_details =
+            get_snapshot_id(aws, original_volume_id, node['blockdevice_nativex']['restore'][:restore_point])
+        final_volume_ids[original_volume_id] = snapshot_details[:snapshot_id]
+        snaps[snapshot_details[:snapshot_id]] = snapshot_details[:volume_size]
       end
-      final_volume_ids[original_volume_id] =
-          get_snapshot_id(aws, original_volume_id, node['blockdevice_nativex']['restore'][:restore_point])[:snapshot_id]
-      snaps << get_snapshot_id(aws, original_volume_id, node['blockdevice_nativex']['restore'][:restore_point])
+      node.set['blockdevice_nativex']['restore_session'][:in_progress] = true
+      node.set['blockdevice_nativex']['restore_session'][:snaps] = snaps
+      node.set['blockdevice_nativex']['restore_session'][:final_volume_ids] = final_volume_ids
+      node.save unless Chef::Config[:solo]
     end
 
     xfs_filesystem('freeze')
@@ -125,14 +136,14 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
     new_device_id = device_id
 
     # Create new ebs volume from snapshot and attach
-    volume_size = snaps.first.volume_size
+    volume_size = snaps.values.first
     if raid
       snap_ids = []
-      snaps.each do |s|
-        snap_ids << s.snapshot_id
+      snaps.each do |id, size|
+        snap_ids << id
       end
 
-      # Creat new RAID
+      # Create new RAID
       aws_ebs_raid 'restored_raid_volume' do
         aws_access_key aws['aws_access_key_id']
         aws_secret_access_key aws['aws_secret_access_key']
@@ -142,7 +153,7 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
         snapshots snap_ids
       end
     else
-      snap_id = snaps.first.snapshot_id
+      snap_id = snaps.keys.first
 
       # Create new volume
       new_volume_precheck = get_volume_id(aws, snap_id)
@@ -150,13 +161,30 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
         aws_access_key aws['aws_access_key_id']
         aws_secret_access_key aws['aws_secret_access_key']
         size volume_size
-        #device new_device_id #device_id
         snapshot_id snap_id
         most_recent_snapshot if node['blockdevice_nativex']['restore'][:restore_point] == :latest
-        ignore_failure true
         action :create
         not_if { new_volume_precheck[:status] == 'available' }
       end
+
+      # Wait for new volume to create
+      sleep 30 unless new_volume_precheck[:status] == 'available'
+      # new_volume_id = get_volume_id(aws, snap_id)
+      # ruby_block 'waiting_for_volume_to_create' do
+      #   block do
+      #     Chef::Log.info("Waiting for volume_id=#{new_volume_id[:id]} to create.")
+      #     creating = 0
+      #     until new_volume_id[:status] == 'available'
+      #       if creating > 180
+      #         raise "volume_id=#{new_volume_id[:id]} has been in the creating state too long. Something is wrong."
+      #       end
+      #       sleep 5
+      #       new_volume_id = Chef::Provider::Nativex::Blockdevice::Helpers.get_volume_id(aws, snap_id) #NoMethodError
+      #       creating += 5
+      #     end
+      #   end
+      #   ignore_failure true
+      # end
 
       # Attach new volume
       new_volume_id = get_volume_id(aws, snap_id)
@@ -174,20 +202,23 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
     end
 
     # Wait for new volume to attach
-    ruby_block 'waiting_for_volume_to_attach' do
-      block do
-        attaching = 0
-        until new_volume_id[:status] == 'in-use'
-          if attaching > 180
-            raise "#{new_volume_id[:id]} has been in the attaching state too long. Something is wrong."
-          end
-          sleep 5
-          new_volume_id = Nativex::Blockdevice::Helpers.get_volume_id(aws, snap_id)
-          attaching += 5
-        end
-      end
-      ignore_failure true
-    end
+    sleep 30
+    # ruby_block 'waiting_for_volume_to_attach' do
+    #   block do
+    #     Chef::Log.info("Waiting for volume_id=#{new_volume_id[:id]} to attach.")
+    #     attaching = 0
+    #     until new_volume_id[:status] == 'in-use'
+    #       if attaching > 180
+    #         Chef::Log.error("#{new_volume_id[:id]} has been in the attaching state too long. Something is wrong.")
+    #         raise "#{new_volume_id[:id]} has been in the attaching state too long. Something is wrong."
+    #       end
+    #       sleep 5
+    #       new_volume_id = Chef::Recipe::Nativex::Blockdevice::Helpers.get_volume_id(aws, snap_id) #NoMethodError
+    #       attaching += 5
+    #     end
+    #   end
+    #   ignore_failure true
+    # end
 
     # Mount new volume
     new_volume_id = get_volume_id(aws, snap_id)
@@ -201,31 +232,32 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
 
     xfs_filesystem('unfreeze')
 
-    # Tag old volume for deletion
-    time = Time.now + (node['blockdevice_nativex']['restore'][:destroy_volumes_after]*60*60)
-    aws_resource_tag 'tag_data_volumes' do
-      aws_access_key aws['aws_access_key_id']
-      aws_secret_access_key aws['aws_secret_access_key']
-      resource_id original_volume_ids #can be a array
-      tags({:Destroy => true,
-            :DestructionTime => time.inspect})
-      action [:add, :update]
-    end
-
-    # Delete old volumes if they are ready for deletion
-    original_volume_ids.each do |original_volume_id|
-      blockdevice_nativex_volume original_volume_id do
-        access_key_id aws['aws_access_key_id']
-        secret_access_key aws['aws_secret_access_key']
-        retention_check true
-        action :delete
+    if new_volume_id[:status] == 'in-use' && lsblk.include?(new_device_id.split('/').last)
+      # Tag old volume for deletion
+      time = Time.now + (node['blockdevice_nativex']['restore'][:destroy_volumes_after]*60*60)
+      aws_resource_tag 'tag_data_volumes' do
+        aws_access_key aws['aws_access_key_id']
+        aws_secret_access_key aws['aws_secret_access_key']
+        resource_id original_volume_ids #can be a array
+        tags({:Destroy => true,
+              :DestructionTime => time.inspect})
+        action [:add, :update]
       end
-    end
 
-    # Keep track of restored volumes
-    file '/root/snapshots_restore' do
-      content device_id
-      action :create
+      # Delete old volumes if they are ready for deletion
+      original_volume_ids.each do |original_volume_id|
+        blockdevice_nativex_volume original_volume_id do
+          access_key_id aws['aws_access_key_id']
+          secret_access_key aws['aws_secret_access_key']
+          retention_check true
+          action :delete
+        end
+      end
+
+      # Keep track of restored volumes
+      node.set['blockdevice_nativex']['restore_session'][:restored_devices] << device_id
+      node.set['blockdevice_nativex']['restore_session'][:in_progress] = false
+      node.save unless Chef::Config[:solo]
     end
   end
 end
