@@ -1,5 +1,5 @@
 if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
-    node['blockdevice_nativex']['restore'][:take_action] && false
+    node['blockdevice_nativex']['restore'][:take_action]
 
   aws = Chef::EncryptedDataBagItem.load("credentials", "aws")
   include_recipe 'aws'
@@ -128,6 +128,15 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
       end
     end
 
+    # Ensure volume doesnt remount on next run of blockdevice-nativex cookbook
+    aws_resource_tag 'tag_data_volumes' do
+      aws_access_key aws['aws_access_key_id']
+      aws_secret_access_key aws['aws_secret_access_key']
+      resource_id final_volume_ids
+      tags({:Remount => false})
+      action [:add, :update]
+    end
+
     # Restore volume to new device to prevent having to stop the instance
     new_device_id = device_id.next
     block_devices = `lsblk -n`
@@ -169,23 +178,6 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
       end
 
       # Wait for new volume to create
-      #sleep 30 unless new_volume_precheck[:status] == 'available'
-      # new_volume_id = get_volume_id(aws, snap_id)
-      # ruby_block 'waiting_for_volume_to_create' do
-      #   block do
-      #     Chef::Log.info("Waiting for volume_id=#{new_volume_id[:id]} to create.")
-      #     creating = 0
-      #     until new_volume_id[:status] == 'available'
-      #       if creating > 180
-      #         raise "volume_id=#{new_volume_id[:id]} has been in the creating state too long. Something is wrong."
-      #       end
-      #       sleep 5
-      #       new_volume_id = Chef::Provider::Nativex::Blockdevice::Helpers.get_volume_id(aws, snap_id) #NoMethodError
-      #       creating += 5
-      #     end
-      #   end
-      #   ignore_failure true
-      # end
       new_volume_id = get_volume_id(aws, snap_id)
       ruby_block 'waiting_for_volume_to_create' do
         block do
@@ -215,23 +207,6 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
     end
 
     # Wait for new volume to attach
-    #sleep 30
-    # ruby_block 'waiting_for_volume_to_attach' do
-    #   block do
-    #     Chef::Log.info("Waiting for volume_id=#{new_volume_id[:id]} to attach.")
-    #     attaching = 0
-    #     until new_volume_id[:status] == 'in-use'
-    #       if attaching > 180
-    #         Chef::Log.error("#{new_volume_id[:id]} has been in the attaching state too long. Something is wrong.")
-    #         raise "#{new_volume_id[:id]} has been in the attaching state too long. Something is wrong."
-    #       end
-    #       sleep 5
-    #       new_volume_id = Chef::Recipe::Nativex::Blockdevice::Helpers.get_volume_id(aws, snap_id) #NoMethodError
-    #       attaching += 5
-    #     end
-    #   end
-    #   ignore_failure true
-    # end
     new_volume_id = get_volume_id(aws, snap_id)
     ruby_block 'waiting_for_volume_to_attach' do
       block do
@@ -268,7 +243,7 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
       aws_resource_tag 'tag_data_volumes' do
         aws_access_key aws['aws_access_key_id']
         aws_secret_access_key aws['aws_secret_access_key']
-        resource_id original_volume_ids #can be a array
+        resource_id final_volume_ids #can be a array
         tags({:Destroy => true,
               :DestructionTime => time.inspect})
         action [:add, :update]

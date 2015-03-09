@@ -97,7 +97,6 @@ if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
   execute "fixup #{node['blockdevice_nativex']['dir']} group" do
     command "chown -#{permission_recurse_switch}f :#{node['blockdevice_nativex']['mount_point_group']} #{node['blockdevice_nativex']['dir']}"
     only_if { Etc.getgrgid(File.stat("#{node['blockdevice_nativex']['dir']}").gid).name != "#{node['blockdevice_nativex']['mount_point_group']}" }
-    ignore_failure true #TODO: Remove me
   end
 
   execute "fixup #{node['blockdevice_nativex']['dir']} permissions" do

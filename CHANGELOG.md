@@ -3,7 +3,7 @@ blockdevice-nativex CHANGELOG
 
 This file is used to list changes made in each version of the blockdevice-nativex cookbook.
 
-0.3.0
+0.4.0
 -----
 - [Jesse Hauf] - Renamed snapshots to snapshots_take
 - [Jesse Hauf] - Created snapshots_restore recipe and added support for restoring snapshots
