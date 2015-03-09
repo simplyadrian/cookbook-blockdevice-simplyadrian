@@ -23,6 +23,11 @@ module Nativex
         region
       end
 
+      def get_virtualization_type(creds, instance_id)
+        ec2 = ec2_auth(creds['aws_access_key_id'], creds['aws_secret_access_key'])
+        ec2.instances[instance_id].virtualization_type
+      end
+
       def get_snapshot_id(creds, volume_id = '', restore_point = :latest, *offset)
         ec2 = ec2_auth(creds['aws_access_key_id'], creds['aws_secret_access_key'])
         snapshot = nil
@@ -44,22 +49,9 @@ module Nativex
       def volume_exists(creds, volume_id)
         ec2 = ec2_auth(creds['aws_access_key_id'], creds['aws_secret_access_key'])
         ec2.volumes[volume_id].exists?
-        # volume_status = ec2.client.describe_volume_status(volume_ids: [volume_id])
-        # raise "#{volume_status[:status]}" if true
-        # if volume_status[:status] == 'ok'
-        #   return_value = true
-        # elsif volume_status[:status] == 'insufficient-data'
-        #   raise "Volume exists but insufficient data received when querying volume id=#{volume_id}. Retry request."
-        # elsif volume_status[:status] == 'impaired' || volume_status[:status] == 'warning'
-        #   raise "Volume exists but volume_status=#{volume_status[:status]}. Details: #{volume_status[:details][:name]}, #{volume_status[:details][:status]}"
-        # else
-        #   return_value = false
-        # end
-        # raise "#{return_value}" if true
       end
 
-      # Returns hash with volume_id and state based off provided snapshot_id
-      def get_volume_id(creds, snapshot_id)
+      def get_volume_id(creds, snapshot_id) # Returns hash with volume_id and state based off provided snapshot_id
         ec2 = ec2_auth(creds['aws_access_key_id'], creds['aws_secret_access_key'])
         ebs_volume_id = Hash.new
         ec2.client.describe_volumes(filters: [{name: 'snapshot-id', values: [snapshot_id] }]).volume_set.each do |vol|
@@ -68,7 +60,7 @@ module Nativex
         ebs_volume_id
       end
 
-      def get_volume_device(creds, volume_id) # returns aws device name of volume, returns nil if volume does not exist
+      def get_volume_device(creds, volume_id) # Returns aws device name of volume, returns nil if volume does not exist
         ec2 = ec2_auth(creds['aws_access_key_id'], creds['aws_secret_access_key'])
         device = ''
         ec2.client.describe_volumes(filters: [{name: 'volume-id', values: [volume_id] }]).volume_set.each do |vol|
@@ -116,10 +108,9 @@ module Nativex
         aws_device_iterators.delete('>')
         aws_device_iterators.sort!
 
-        #Check for the offset
         device_offset = 0
         if local_device_iterators.first == aws_device_iterators.first
-          # No offset
+          Chef::Log.info('No offset detected.')
         elsif local_device_iterators.first < aws_device_iterators.first
           (local_device_iterators.first ... aws_device_iterators.first).each do device_offset += 1 end
         elsif local_device_iterators.first > aws_device_iterators.first
@@ -133,21 +124,3 @@ module Nativex
     end
   end
 end
-
-
-# def find_snapshot_id(volume_id="", find_most_recent=false)
-#   snapshot_id = nil
-#   snapshots = if find_most_recent
-#                 ec2.describe_snapshots.sort { |a,b| a[:aws_started_at] <=> b[:aws_started_at] }
-#               else
-#                 ec2.describe_snapshots.sort { |a,b| b[:aws_started_at] <=> a[:aws_started_at] }
-#               end
-#   snapshots.each do |snapshot|
-#     if snapshot[:aws_volume_id] == volume_id
-#       snapshot_id = snapshot[:aws_id]
-#     end
-#   end
-#   raise "Cannot find snapshot id!" unless snapshot_id
-#   Chef::Log.debug("Snapshot ID is #{snapshot_id}")
-#   snapshot_id
-# end

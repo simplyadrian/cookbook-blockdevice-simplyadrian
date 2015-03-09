@@ -1,11 +1,12 @@
 if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
-    node['blockdevice_nativex']['restore'][:take_action]
+    node['blockdevice_nativex']['restore'][:take_action] && false
 
   aws = Chef::EncryptedDataBagItem.load("credentials", "aws")
   include_recipe 'aws'
   ::Chef::Recipe.send(:include, Nativex::Blockdevice::Helpers)
 
   original_volume_ids = node['aws']['ebs_volume'].to_s.scan(/vol-[a-zA-Z0-9]+/)
+  volume_timeout = node['blockdevice_nativex']['max_timeout']
   raid = node['blockdevice_nativex']['ebs']['raid']
   device_to_restore = node['blockdevice_nativex']['restore'][:device_to_restore]
   node.set['blockdevice_nativex']['restore_session'] ||= {} unless
@@ -168,7 +169,7 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
       end
 
       # Wait for new volume to create
-      sleep 30 unless new_volume_precheck[:status] == 'available'
+      #sleep 30 unless new_volume_precheck[:status] == 'available'
       # new_volume_id = get_volume_id(aws, snap_id)
       # ruby_block 'waiting_for_volume_to_create' do
       #   block do
@@ -185,6 +186,18 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
       #   end
       #   ignore_failure true
       # end
+      new_volume_id = get_volume_id(aws, snap_id)
+      ruby_block 'waiting_for_volume_to_create' do
+        block do
+          wait_volume_lwrp = Chef::Resource::BlockdeviceNativexVolume.new(new_volume_id[:id], run_context)
+          wait_volume_lwrp.access_key_id(aws['aws_access_key_id'])
+          wait_volume_lwrp.secret_access_key(aws['aws_secret_access_key'])
+          wait_volume_lwrp.wait_for('create')
+          wait_volume_lwrp.timeout(volume_timeout)
+          wait_volume_lwrp.run_action(:wait)
+        end
+        action :run
+      end
 
       # Attach new volume
       new_volume_id = get_volume_id(aws, snap_id)
@@ -193,7 +206,7 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
           attach_volume_lwrp = Chef::Resource::BlockdeviceNativexVolume.new(new_volume_id[:id], run_context)
           attach_volume_lwrp.access_key_id(aws['aws_access_key_id'])
           attach_volume_lwrp.secret_access_key(aws['aws_secret_access_key'])
-          attach_volume_lwrp.device(new_device_id) # was device_id
+          attach_volume_lwrp.device(new_device_id)
           attach_volume_lwrp.run_action(:attach)
         end
         action :run
@@ -202,7 +215,7 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
     end
 
     # Wait for new volume to attach
-    sleep 30
+    #sleep 30
     # ruby_block 'waiting_for_volume_to_attach' do
     #   block do
     #     Chef::Log.info("Waiting for volume_id=#{new_volume_id[:id]} to attach.")
@@ -219,20 +232,37 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
     #   end
     #   ignore_failure true
     # end
+    new_volume_id = get_volume_id(aws, snap_id)
+    ruby_block 'waiting_for_volume_to_attach' do
+      block do
+        wait_volume_lwrp = Chef::Resource::BlockdeviceNativexVolume.new(new_volume_id[:id], run_context)
+        wait_volume_lwrp.access_key_id(aws['aws_access_key_id'])
+        wait_volume_lwrp.secret_access_key(aws['aws_secret_access_key'])
+        wait_volume_lwrp.wait_for('attach')
+        wait_volume_lwrp.timeout(volume_timeout)
+        wait_volume_lwrp.run_action(:wait)
+      end
+      action :run
+    end
 
     # Mount new volume
     new_volume_id = get_volume_id(aws, snap_id)
     if new_volume_id[:status] == 'in-use'
       lsblk = `lsblk | grep "#{node['blockdevice_nativex']['dir']}"`
       unless lsblk.include?(new_device_id.split('/').last)
-        Chef::Log.info("Mounting device=#{device_id} at dir=#{node['blockdevice_nativex']['dir']}")
-        mount = `mount #{device_id} #{node['blockdevice_nativex']['dir']} -o noatime`
+        Chef::Log.info("Mounting device=#{new_device_id} at dir=#{node['blockdevice_nativex']['dir']}")
+        mount = `mount #{new_device_id} #{node['blockdevice_nativex']['dir']} -o noatime`
+        xfs_filesystem('unfreeze')
       end
     end
 
-    xfs_filesystem('unfreeze')
 
     if new_volume_id[:status] == 'in-use' && lsblk.include?(new_device_id.split('/').last)
+      # Keep track of restored volumes
+      node.set['blockdevice_nativex']['restore_session'][:restored_devices] << device_id
+      node.set['blockdevice_nativex']['restore_session'][:in_progress] = false
+      node.save unless Chef::Config[:solo]
+
       # Tag old volume for deletion
       time = Time.now + (node['blockdevice_nativex']['restore'][:destroy_volumes_after]*60*60)
       aws_resource_tag 'tag_data_volumes' do
@@ -253,11 +283,6 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
           action :delete
         end
       end
-
-      # Keep track of restored volumes
-      node.set['blockdevice_nativex']['restore_session'][:restored_devices] << device_id
-      node.set['blockdevice_nativex']['restore_session'][:in_progress] = false
-      node.save unless Chef::Config[:solo]
     end
   end
 end

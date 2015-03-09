@@ -9,14 +9,27 @@ end
 if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
   aws = Chef::EncryptedDataBagItem.load("credentials", "aws")
   include_recipe 'aws'
+  ::Chef::Recipe.send(:include, Nativex::Blockdevice::Helpers)
+
+  # Determine if this is a HVM or Paravirtual instance
+  instance_id = get_instance_id
+  virtualization_type = get_virtualization_type(aws, instance_id)
+  if virtualization_type == :hvm
+    hvm = true
+  elsif virtualization_type == :paravirtual
+    hvm = false
+  else
+    hvm = node['blockdevice_nativex']['ebs']['hvm']
+  end
 
   if node['blockdevice_nativex']['ebs']['raid']
+
     aws_ebs_raid 'data_volume_raid' do
       mount_point node['blockdevice_nativex']['dir']
       mount_point_group node['blockdevice_nativex']['mount_point_group']
       disk_count node['blockdevice_nativex']['ebs']['count']
       disk_size node['blockdevice_nativex']['ebs']['size']
-      hvm node['blockdevice_nativex']['ebs']['hvm']
+      hvm hvm
       level node['blockdevice_nativex']['ebs']['level']
       filesystem node['blockdevice_nativex']['filesystem']
       action :auto_attach
@@ -40,16 +53,18 @@ if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
       aws_access_key aws['aws_access_key_id']
       aws_secret_access_key aws['aws_secret_access_key']
       size node['blockdevice_nativex']['ebs']['size']
-      device device_id.gsub('xvd', 'sd') # aws uses sdx instead of xvdx
+      device (hvm ? device_id : device_id.gsub('xvd', 'sd')) # aws uses sdx instead of xvdx
       most_recent_snapshot node['blockdevice_nativex']['ebs']['most_recent']
       action [:create, :attach]
     end
+
+    #TODO: not_if tag destroy == true
  
     # wait for the drive to attach, before making a filesystem
     ruby_block "sleeping_data_volume" do
       block do
         timeout = 0
-        until File.blockdev?(device_id) || timeout >= default['blockdevice_nativex']['max_timeout']
+        until File.blockdev?(device_id) || timeout >= node['blockdevice_nativex']['max_timeout']
           Chef::Log.debug("device #{device_id} not ready - sleeping 10s")
           timeout += 10
           sleep 10
@@ -82,6 +97,7 @@ if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
   execute "fixup #{node['blockdevice_nativex']['dir']} group" do
     command "chown -#{permission_recurse_switch}f :#{node['blockdevice_nativex']['mount_point_group']} #{node['blockdevice_nativex']['dir']}"
     only_if { Etc.getgrgid(File.stat("#{node['blockdevice_nativex']['dir']}").gid).name != "#{node['blockdevice_nativex']['mount_point_group']}" }
+    ignore_failure true #TODO: Remove me
   end
 
   execute "fixup #{node['blockdevice_nativex']['dir']} permissions" do

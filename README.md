@@ -54,6 +54,22 @@ a software RAID across the volumes.
 
 Attributes
 ----------
+#### General Attributes
+<table>
+  <tr>
+    <th>Key</th>
+    <th>Type</th>
+    <th>Description</th>
+    <th>Default</th>
+  </tr>
+  <tr>
+    <td><tt>['blockdevice_nativex']['max_timeout']/tt></td>
+    <td>Int</td>
+    <td>Max timeout in seconds for volume and snapshot operations.</td>
+    <td><tt>180</tt></td>
+  </tr>
+</table>
+
 #### blockdevice-nativex::default
 <table>
   <tr>
@@ -100,7 +116,7 @@ Attributes
   </tr>
 </table>
 
-#### blockdevice-nativex::snapshots
+#### blockdevice-nativex::snapshots_take
 <table>
   <tr>
     <th>Key</th>
@@ -113,6 +129,48 @@ Attributes
     <td>Int</td>
     <td>Number of snapshots to retain during pruning operation. Oldest snapshots will be pruned first.</td>
     <td><tt>5</tt></td>
+  </tr>
+</table>
+
+#### blockdevice-nativex::snapshots_restore
+<table>
+  <tr>
+    <th>Key</th>
+    <th>Type</th>
+    <th>Description</th>
+    <th>Default</th>
+  </tr>
+  <tr>
+    <td><tt>['blockdevice_nativex']['restore'][:take_action]</tt></td>
+    <td>Bool</td>
+    <td>Whether or not to restore snapshots during chef run.</td>
+    <td><tt>false</tt></td>
+  </tr>
+  <tr>
+    <td><tt>['blockdevice_nativex']['restore'][:destroy_volumes_after]</tt></td>
+    <td>Int</td>
+    <td>Number of hours to wait before destroying the old ebs volume after restore, set to 0 for immediate
+      destruction</td>
+    <td><tt>0</tt></td>
+  </tr>
+  <tr>
+    <td><tt>['blockdevice_nativex']['restore'][:device_to_restore]</tt></td>
+    <td>String</td>
+    <td>Id of device to restore, if blank it will restore the first device found.</td>
+    <td><tt>''</tt></td>
+  </tr>
+  <tr>
+    <td><tt>['blockdevice_nativex']['restore'][:restore_point]</tt></td>
+    <td>Symbol</td>
+    <td>Valid options :latest :hourly :daily :weekly :monthly</td>
+    <td><tt>:latest</tt></td>
+  </tr>
+  <tr>
+    <td><tt>['blockdevice_nativex']['restore'][:restore_point]</tt></td>
+    <td>Bool</td>
+    <td>Example: if restore_point is set to daily and restore_point is set to -1 it will restore to :latest daily -1.
+      Set to 0 to choose the latest</td>
+    <td><tt>false</tt></td>
   </tr>
 </table>
 
