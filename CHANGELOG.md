@@ -13,6 +13,10 @@ detaching volumes.
 - [Jesse Hauf] - Add libraries to support aws-sdk-v1 Ruby operations
 - [Jesse Hauf] - Added timeout attribute support to volume recipe
 
+0.3.0
+-----
+- [Jesse Hauf] - Added support for auto-detecting HVM instances
+
 0.2.0
 -----
 - [Jesse Hauf] - Added support for HVM instances

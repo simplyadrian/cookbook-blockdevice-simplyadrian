@@ -12,4 +12,4 @@ gem_package "aws-sdk-v1" do
 end
 
 include_recipe "xfs::default" if node['blockdevice_nativex']['filesystem'] == "xfs"
-#include_recipe "blockdevice-nativex::volumes" # TODO: uncomment
+include_recipe "blockdevice-nativex::volumes"

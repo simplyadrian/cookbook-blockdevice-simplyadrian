@@ -47,46 +47,54 @@ if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
     node.set_unless['aws']['ebs_volume']['data_volume']['device'] = "/dev/xvd#{devid}"
  
     device_id = node['aws']['ebs_volume']['data_volume']['device']
- 
-    # no raid, so just mount and format a single volume
-    aws_ebs_volume 'data_volume' do
-      aws_access_key aws['aws_access_key_id']
-      aws_secret_access_key aws['aws_secret_access_key']
-      size node['blockdevice_nativex']['ebs']['size']
-      device (hvm ? device_id : device_id.gsub('xvd', 'sd')) # aws uses sdx instead of xvdx
-      most_recent_snapshot node['blockdevice_nativex']['ebs']['most_recent']
-      action [:create, :attach]
+
+    remount = true
+    if node['aws']['ebs_volume']['data_volume'].attribute?('volume_id')
+      existing_volume_id = node['aws']['ebs_volume']['data_volume']['volume_id']
+      tags = get_volume_tags(aws, existing_volume_id)
+      remount = false unless tags[:Remount]
+      #raise "remount=#{remount}, tags=#{tags.inspect}, #{existing_volume_id}" if true
     end
 
-    #TODO: not_if tag destroy == true
+    if remount
+      # no raid, so just mount and format a single volume
+      aws_ebs_volume 'data_volume' do
+        aws_access_key aws['aws_access_key_id']
+        aws_secret_access_key aws['aws_secret_access_key']
+        size node['blockdevice_nativex']['ebs']['size']
+        device (hvm ? device_id : device_id.gsub('xvd', 'sd')) # aws uses sdx instead of xvdx
+        most_recent_snapshot node['blockdevice_nativex']['ebs']['most_recent']
+        action [:create, :attach]
+      end
  
-    # wait for the drive to attach, before making a filesystem
-    ruby_block "sleeping_data_volume" do
-      block do
-        timeout = 0
-        until File.blockdev?(device_id) || timeout >= node['blockdevice_nativex']['max_timeout']
-          Chef::Log.debug("device #{device_id} not ready - sleeping 10s")
-          timeout += 10
-          sleep 10
+      # wait for the drive to attach, before making a filesystem
+      ruby_block "sleeping_data_volume" do
+        block do
+          timeout = 0
+          until File.blockdev?(device_id) || timeout >= node['blockdevice_nativex']['max_timeout']
+            Chef::Log.debug("device #{device_id} not ready - sleeping 10s")
+            timeout += 10
+            sleep 10
+          end
         end
       end
-    end
-    
-    # create a filesystem
-    execute 'mkfs' do
-      command "mkfs -t #{node['blockdevice_nativex']['filesystem']} #{device_id}"
 
-      # Note the escaped quotes for bash 
-      # blkid works on CentOS and hopefully elsewhere. See: http://unix.stackexchange.com/a/53552/55079
-      # TYPE=\\\"#{node['blockdevice_nativex']['filesystem']}\\\" seems to work for 'xfs' . If it doesn't work for something else, we might want a mapping of mkfs -t arguments to blkid outputs.
-      not_if "blkid #{device_id} | grep \" TYPE=\\\"#{node['blockdevice_nativex']['filesystem']}\\\"\""
-    end
- 
-    mount node['blockdevice_nativex']['dir'] do
-      device device_id
-      fstype node['blockdevice_nativex']['filesystem']
-      options 'noatime'
-      action [:mount]
+      # create a filesystem
+      execute 'mkfs' do
+        command "mkfs -t #{node['blockdevice_nativex']['filesystem']} #{device_id}"
+
+        # Note the escaped quotes for bash
+        # blkid works on CentOS and hopefully elsewhere. See: http://unix.stackexchange.com/a/53552/55079
+        # TYPE=\\\"#{node['blockdevice_nativex']['filesystem']}\\\" seems to work for 'xfs' . If it doesn't work for something else, we might want a mapping of mkfs -t arguments to blkid outputs.
+        not_if "blkid #{device_id} | grep \" TYPE=\\\"#{node['blockdevice_nativex']['filesystem']}\\\"\""
+      end
+
+      mount node['blockdevice_nativex']['dir'] do
+        device device_id
+        fstype node['blockdevice_nativex']['filesystem']
+        options 'noatime'
+        action [:mount]
+      end
     end
   end
 
@@ -97,6 +105,7 @@ if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
   execute "fixup #{node['blockdevice_nativex']['dir']} group" do
     command "chown -#{permission_recurse_switch}f :#{node['blockdevice_nativex']['mount_point_group']} #{node['blockdevice_nativex']['dir']}"
     only_if { Etc.getgrgid(File.stat("#{node['blockdevice_nativex']['dir']}").gid).name != "#{node['blockdevice_nativex']['mount_point_group']}" }
+    ignore_failure true
   end
 
   execute "fixup #{node['blockdevice_nativex']['dir']} permissions" do

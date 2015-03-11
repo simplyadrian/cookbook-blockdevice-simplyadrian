@@ -51,6 +51,7 @@ action :wait do
     until new_volume_id[:status] == (new_resource.wait_for == 'create' ? 'available' : 'in-use')
       if creating > new_resource.timeout
         Chef::Log.error("volume_id=#{new_volume_id[:id]} has been in the #{new_resource.wait_for}ing state too long.")
+        break
       end
       sleep 5
       new_volume_id = get_volume_status(aws, new_resource.volume_id)

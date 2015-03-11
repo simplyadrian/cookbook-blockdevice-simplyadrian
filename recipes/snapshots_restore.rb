@@ -11,11 +11,17 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
   device_to_restore = node['blockdevice_nativex']['restore'][:device_to_restore]
   node.set['blockdevice_nativex']['restore_session'] ||= {} unless
       node['blockdevice_nativex'].attribute?('restore_session')
+  node.set['blockdevice_nativex']['restore_session'][:restored_devices] ||= [] unless
+      node['blockdevice_nativex']['restore_session'].attribute?(:restored_devices)
   device_ids = []
   device_id = nil
   glob_regex = nil
   snaps = {}
   final_volume_ids = {}
+
+  if raid
+    raise 'Raid is unsupported in this release.'
+  end
 
   # Do I know how to find this device?
   if raid
@@ -118,6 +124,7 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
 
     # Detach old volume(s)
     final_volume_ids.each do |volume_id,snapshot_id|
+
       status = get_volume_status(aws, volume_id)
       blockdevice_nativex_volume volume_id do
         access_key_id aws['aws_access_key_id']
@@ -126,15 +133,15 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
         action :detach
         only_if { status[:status] == 'in-use' }
       end
-    end
 
-    # Ensure volume doesnt remount on next run of blockdevice-nativex cookbook
-    aws_resource_tag 'tag_data_volumes' do
-      aws_access_key aws['aws_access_key_id']
-      aws_secret_access_key aws['aws_secret_access_key']
-      resource_id final_volume_ids
-      tags({:Remount => false})
-      action [:add, :update]
+      aws_resource_tag 'tag_data_volumes' do # Ensure volume doesnt remount on next run of blockdevice-nativex cookbook
+        aws_access_key aws['aws_access_key_id']
+        aws_secret_access_key aws['aws_secret_access_key']
+        resource_id volume_id
+        tags({:Remount => false})
+        action [:add, :update]
+      end
+
     end
 
     # Restore volume to new device to prevent having to stop the instance
@@ -143,7 +150,7 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
     while block_devices.include? new_device_id
       new_device_id = new_device_id.next
     end
-    new_device_id = device_id
+    #new_device_id = device_id
 
     # Create new ebs volume from snapshot and attach
     volume_size = snaps.values.first
@@ -179,6 +186,10 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
 
       # Wait for new volume to create
       new_volume_id = get_volume_id(aws, snap_id)
+      until new_volume_id[:id] != ''
+        sleep 30
+        new_volume_id = get_volume_id(aws, snap_id)
+      end
       ruby_block 'waiting_for_volume_to_create' do
         block do
           wait_volume_lwrp = Chef::Resource::BlockdeviceNativexVolume.new(new_volume_id[:id], run_context)
@@ -189,6 +200,7 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
           wait_volume_lwrp.run_action(:wait)
         end
         action :run
+        not_if { new_volume_id[:status] == 'in-use' }
       end
 
       # Attach new volume
@@ -218,6 +230,7 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
         wait_volume_lwrp.run_action(:wait)
       end
       action :run
+      not_if { new_volume_id[:status] == 'in-use' }
     end
 
     # Mount new volume
@@ -231,10 +244,9 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
       end
     end
 
-
     if new_volume_id[:status] == 'in-use' && lsblk.include?(new_device_id.split('/').last)
       # Keep track of restored volumes
-      node.set['blockdevice_nativex']['restore_session'][:restored_devices] << device_id
+      node.set['blockdevice_nativex']['restore_session'][:restored_devices] = device_id
       node.set['blockdevice_nativex']['restore_session'][:in_progress] = false
       node.save unless Chef::Config[:solo]
 
@@ -243,7 +255,7 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
       aws_resource_tag 'tag_data_volumes' do
         aws_access_key aws['aws_access_key_id']
         aws_secret_access_key aws['aws_secret_access_key']
-        resource_id final_volume_ids #can be a array
+        resource_id original_volume_ids #can be a array
         tags({:Destroy => true,
               :DestructionTime => time.inspect})
         action [:add, :update]

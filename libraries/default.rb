@@ -36,10 +36,16 @@ module Nativex
             snapshot = snap if snapshot.nil? || snap.start_time > snapshot.start_time
           end
         else
-          #TODO: if not :latest
-          # snapshots = ec2.snapshots.filter('volume-id', volume_id).filter('tag:restore_point', restore_point)
-          # snapshots = snapshots.sort_by(&:start_time)
-          # snapshot = snapshots[offset.abs]
+          x = 0
+          ec2.client.describe_snapshots(filters: [{name: 'volume-id', values: [volume_id] }, {name: 'tag', values: ["RestorePoint=#{restore_point}"] }]).snapshot_set.each do |snap|
+            snapshot = snap
+            if offset > 0 && x == offset
+              break
+            elsif offset == 0
+              break
+            end
+            x += 1
+          end
         end
         #raise "output: #{snapshot.snapshot_id.nil?}" if true # <-- this works correctly
         #raise 'Cannot find valid snapshot id.' unless snapshot.snapshot_id.nil? # <-- this does not work correctly
@@ -79,6 +85,12 @@ module Nativex
           ebs_volume_id = { :id => vol.volume_id, :status => vol.status }
         end
         ebs_volume_id
+      end
+
+      def get_volume_tags(creds, volume_id)
+        ec2 = ec2_auth(creds['aws_access_key_id'], creds['aws_secret_access_key'])
+        volume = ec2.volumes[volume_id]
+        volume.tags.to_h
       end
 
       def xfs_filesystem(action)
