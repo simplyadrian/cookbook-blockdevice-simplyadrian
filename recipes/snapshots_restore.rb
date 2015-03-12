@@ -13,18 +13,19 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
       node['blockdevice_nativex'].attribute?('restore_session')
   node.set['blockdevice_nativex']['restore_session'][:restored_devices] ||= [] unless
       node['blockdevice_nativex']['restore_session'].attribute?(:restored_devices)
+  session_in_progress = false
+  session_in_progress = node['blockdevice_nativex']['restore_session'][:in_progress] if
+      node['blockdevice_nativex']['restore_session'].attribute?(:in_progress)
   device_ids = []
   device_id = nil
   glob_regex = nil
   snaps = {}
   final_volume_ids = {}
-
-  if raid
-    raise 'Raid is unsupported in this release.'
-  end
+  new_device = true
 
   # Do I know how to find this device?
   if raid
+    raise 'Raid is unsupported in this release.' if true
     if device_to_restore =~ %r'/dev/md[0-9]*' || device_to_restore.blank?
       glob_regex = '/dev/md[0-9]*'
     else
@@ -50,6 +51,7 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
 
   if device_ids.length == 1 || (device_ids.count > 1 && device_to_restore.blank?)
     device_id = device_ids[0]
+    new_device = false if session_in_progress
   elsif device_ids.count > 1
     begin
       device_id = device_ids.index(device_to_restore)
@@ -115,7 +117,7 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
       node.save unless Chef::Config[:solo]
     end
 
-    xfs_filesystem('freeze')
+    # xfs_filesystem('freeze')
 
     mount node['blockdevice_nativex']['dir'] do
       device device_id
@@ -124,7 +126,6 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
 
     # Detach old volume(s)
     final_volume_ids.each do |volume_id,snapshot_id|
-
       status = get_volume_status(aws, volume_id)
       blockdevice_nativex_volume volume_id do
         access_key_id aws['aws_access_key_id']
@@ -134,23 +135,25 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
         only_if { status[:status] == 'in-use' }
       end
 
-      aws_resource_tag 'tag_data_volumes' do # Ensure volume doesnt remount on next run of blockdevice-nativex cookbook
+      # Ensure volume does not remount on next run of blockdevice-nativex cookbook
+      aws_resource_tag 'tag_data_volumes' do
         aws_access_key aws['aws_access_key_id']
         aws_secret_access_key aws['aws_secret_access_key']
         resource_id volume_id
         tags({:Remount => false})
         action [:add, :update]
       end
-
     end
 
     # Restore volume to new device to prevent having to stop the instance
-    new_device_id = device_id.next
-    block_devices = `lsblk -n`
-    while block_devices.include? new_device_id
-      new_device_id = new_device_id.next
+    new_device_id = device_id
+    if new_device
+      new_device_id = device_id.next
+      block_devices = `lsblk -n`
+      while block_devices.include? new_device_id
+        new_device_id = new_device_id.next
+      end
     end
-    #new_device_id = device_id
 
     # Create new ebs volume from snapshot and attach
     volume_size = snaps.values.first
@@ -234,16 +237,24 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
     end
 
     # Mount new volume
-    new_volume_id = get_volume_id(aws, snap_id)
-    if new_volume_id[:status] == 'in-use'
-      lsblk = `lsblk | grep "#{node['blockdevice_nativex']['dir']}"`
-      unless lsblk.include?(new_device_id.split('/').last)
-        Chef::Log.info("Mounting device=#{new_device_id} at dir=#{node['blockdevice_nativex']['dir']}")
-        mount = `mount #{new_device_id} #{node['blockdevice_nativex']['dir']} -o noatime`
-        xfs_filesystem('unfreeze')
-      end
+    mount node['blockdevice_nativex']['dir'] do
+      device new_device_id
+      options 'noatime'
+      action :mount
     end
 
+    # new_volume_id = get_volume_id(aws, snap_id)
+    # if new_volume_id[:status] == 'in-use'
+    #   lsblk = `lsblk | grep "#{node['blockdevice_nativex']['dir']}"`
+    #   unless lsblk.include?(new_device_id.split('/').last)
+    #     Chef::Log.info("Mounting device=#{new_device_id} at dir=#{node['blockdevice_nativex']['dir']}")
+    #     mount = `mount #{new_device_id} #{node['blockdevice_nativex']['dir']} -o noatime`
+    #     xfs_filesystem('unfreeze')
+    #   end
+    # end
+
+    new_volume_id = get_volume_id(aws, snap_id)
+    lsblk = `lsblk | grep "#{node['blockdevice_nativex']['dir']}"`
     if new_volume_id[:status] == 'in-use' && lsblk.include?(new_device_id.split('/').last)
       # Keep track of restored volumes
       node.set['blockdevice_nativex']['restore_session'][:restored_devices] = device_id

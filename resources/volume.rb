@@ -1,4 +1,4 @@
-actions :attach, :detach, :delete
+actions :attach, :detach, :delete, :wait
 
 state_attrs :access_key_id,
             :secret_access_key,
