@@ -3,7 +3,7 @@ blockdevice-nativex CHANGELOG
 
 This file is used to list changes made in each version of the blockdevice-nativex cookbook.
 
-0.4.0
+0.3.0
 -----
 - [Jesse Hauf] - Renamed snapshots to snapshots_take
 - [Jesse Hauf] - Created snapshots_restore recipe and added support for restoring snapshots
@@ -12,9 +12,6 @@ detaching volumes.
 - [Jesse Hauf] - Added lwrp to wait for attach and create operations
 - [Jesse Hauf] - Add libraries to support aws-sdk-v1 Ruby operations
 - [Jesse Hauf] - Added timeout attribute support to volume recipe
-
-0.3.0
------
 - [Jesse Hauf] - Added support for auto-detecting HVM instances
 
 0.2.0

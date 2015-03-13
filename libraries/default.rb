@@ -47,8 +47,6 @@ module Nativex
             x += 1
           end
         end
-        #raise "output: #{snapshot.snapshot_id.nil?}" if true # <-- this works correctly
-        #raise 'Cannot find valid snapshot id.' unless snapshot.snapshot_id.nil? # <-- this does not work correctly
         snapshot
       end
 

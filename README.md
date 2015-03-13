@@ -25,7 +25,9 @@ Note: Currently the snapshots recipe will not snapshot an instance on the first 
 attributes are on available. It will work on subsequent runs.
 
 #### snapshots_restore.rb
-Restores an EBS volume from snapshot.
+Restores an EBS volume from snapshot. You must take snapshot(s) of the volume first using the
+blockdevice-nativex::snapshots_restore recipe. It is recommended that the restore recipe is last in the nodes run
+list.
 
 To best ensure this recipe can match volumes to local devices the ebs_volume attribute data structure should look
 like below for each data volume:
@@ -167,30 +169,39 @@ Attributes
   </tr>
   <tr>
     <td><tt>['blockdevice_nativex']['restore'][:restore_point]</tt></td>
-    <td>Bool</td>
+    <td>Int</td>
     <td>Example: if restore_point is set to daily and restore_point is set to -1 it will restore to :latest daily -1.
       Set to 0 to choose the latest</td>
     <td><tt>false</tt></td>
   </tr>
+    <tr>
+      <td><tt>['blockdevice_nativex']['restore'][:restore_to_new_device]</tt></td>
+      <td>Bool</td>
+      <td>Set to true if you need to restore to a new device or if restoration to the current device is failing</td>
+      <td><tt>false</tt></td>
+    </tr>
 </table>
 
 Resources and Providers
 -----
-
 ## volume.rb
 Actions:
 * `attach` - attaches a specified volume to specified instance
 * `detach` - detaches a volume from all instances
 * `delete` - deletes a volume
+* `wait`   - waits for a volume to create or attach
 
 Attribute Parameters:
-* `access_key_id`, secret_access_key - passed to Nativex::Blockdevice::Helpers to authenticate to AWS
+* `access_key_id`, `secret_access_key` - passed to Nativex::Blockdevice::Helpers to authenticate to AWS
 * `volume_id` - Default parameter. ID of EBS volume
 * `force` - Works with action :detach to force the operation
 * `device` - Local block device where volume is attached/needs to be attached
 * `instance_id` - ID of instance can be grabbed using Nativex::Blockdevice::Helpers get_instance_id
-* `retention_check` - Used when deleting volumes to check that resource tag :Destroy is set to true and :DestructionTime has
-lapsed
+* `retention_check` - Used when deleting volumes to check that resource tag :Destroy is set to true and :DestructionTime
+has lapsed
+* `wait_for` - Used only with the :wait action. Valid options are 'attach' or 'create'
+* `timeout` - Used only with the :wait action. Used to specify a maximum wait period for volume :create or :attach
+actions.
 
 See usage examples in snapshots_restore.rb
 

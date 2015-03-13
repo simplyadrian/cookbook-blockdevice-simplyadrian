@@ -8,6 +8,7 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
   original_volume_ids = node['aws']['ebs_volume'].to_s.scan(/vol-[a-zA-Z0-9]+/)
   volume_timeout = node['blockdevice_nativex']['max_timeout']
   raid = node['blockdevice_nativex']['ebs']['raid']
+  new_device = node['blockdevice_nativex']['restore'][:restore_to_new_device]
   device_to_restore = node['blockdevice_nativex']['restore'][:device_to_restore]
   node.set['blockdevice_nativex']['restore_session'] ||= {} unless
       node['blockdevice_nativex'].attribute?('restore_session')
@@ -21,7 +22,6 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
   glob_regex = nil
   snaps = {}
   final_volume_ids = {}
-  new_device = true
 
   # Do I know how to find this device?
   if raid
@@ -116,8 +116,6 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
       node.set['blockdevice_nativex']['restore_session'][:final_volume_ids] = final_volume_ids
       node.save unless Chef::Config[:solo]
     end
-
-    # xfs_filesystem('freeze')
 
     mount node['blockdevice_nativex']['dir'] do
       device device_id
@@ -243,20 +241,12 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
       action :mount
     end
 
-    # new_volume_id = get_volume_id(aws, snap_id)
-    # if new_volume_id[:status] == 'in-use'
-    #   lsblk = `lsblk | grep "#{node['blockdevice_nativex']['dir']}"`
-    #   unless lsblk.include?(new_device_id.split('/').last)
-    #     Chef::Log.info("Mounting device=#{new_device_id} at dir=#{node['blockdevice_nativex']['dir']}")
-    #     mount = `mount #{new_device_id} #{node['blockdevice_nativex']['dir']} -o noatime`
-    #     xfs_filesystem('unfreeze')
-    #   end
-    # end
-
+    # Clean up
     new_volume_id = get_volume_id(aws, snap_id)
     lsblk = `lsblk | grep "#{node['blockdevice_nativex']['dir']}"`
     if new_volume_id[:status] == 'in-use' && lsblk.include?(new_device_id.split('/').last)
       # Keep track of restored volumes
+      node.set['aws']['ebs_volume']['data_volume']['volume_id'] = new_volume_id[:id]
       node.set['blockdevice_nativex']['restore_session'][:restored_devices] = device_id
       node.set['blockdevice_nativex']['restore_session'][:in_progress] = false
       node.save unless Chef::Config[:solo]

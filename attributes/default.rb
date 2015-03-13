@@ -10,8 +10,8 @@ default['blockdevice_nativex']['restore'] = {
     :destroy_volumes_after => 0,
     :device_to_restore => '/dev/xvdb',
     :restore_point => :latest,
-    :restore_point_offset => 0
-    # Restore date, pick closest snapshot to restore date?
+    :restore_point_offset => 0,
+    :restore_to_new_device => false
 }
 default['blockdevice_nativex']['ebs'] = {
   'raid' => false,
