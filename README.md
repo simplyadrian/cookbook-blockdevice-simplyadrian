@@ -168,10 +168,10 @@ Attributes
     <td><tt>:latest</tt></td>
   </tr>
   <tr>
-    <td><tt>['blockdevice_nativex']['restore'][:restore_point]</tt></td>
+    <td><tt>['blockdevice_nativex']['restore'][:restore_point_offset]</tt></td>
     <td>Int</td>
-    <td>Example: if restore_point is set to daily and restore_point is set to -1 it will restore to :latest daily -1.
-      Set to 0 to choose the latest</td>
+    <td>Example: if restore_point is set to daily and restore_point_offset is set to 1 it will restore to :latest
+    daily -1. Set to 0 to choose the latest. (positive integers only)</td>
     <td><tt>false</tt></td>
   </tr>
     <tr>
@@ -240,7 +240,8 @@ Configure `blockdevice-nativex` in a role:
 Note: Size is in GB
 
 HVM override attribute is specific to the NativeX fork of aws cookbook and is required to be set to 'true' when
-provisioning EBS volumes on HVM instances.
+provisioning EBS volumes on HVM instances. blockdevice-nativex will try to auto-detect HVM instances. If this fails
+you can override the value using the attribute.
 
 License and Authors
 -------------------
