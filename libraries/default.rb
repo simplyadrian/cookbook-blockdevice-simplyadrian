@@ -8,9 +8,7 @@ module Nativex
         rescue LoadError
           Chef::Log.error("Missing gem 'aws-sdk-v1'. Use the default recipe to install it first.")
         end
-        # The following authenticator should use '':region => get_region' to localize requests, appears to work in v2
-        # of the SDK but not v1
-        @ec2_auth ||= AWS::EC2.new(:access_key_id => id, :secret_access_key => secret)
+        @ec2_auth ||= AWS::EC2.new(:access_key_id => id, :secret_access_key => secret, :region => get_region)
       end
 
       def get_instance_id
@@ -19,14 +17,11 @@ module Nativex
         instance_id
       end
 
-      destroy_old_volumes_after_x_hours = 'test'
-      vol_or_snap_ops_timeout_sec = 'test'
-
       def get_region
-        region = open('http://169.254.169.254/latest/meta-data/placement/availability-zone/',
+        availability_zone ||= open('http://169.254.169.254/latest/meta-data/placement/availability-zone/',
                       options = {:proxy => false}){|f| f.gets}
-        raise 'Cannot find region.' unless region
-        region
+        raise 'Cannot find region.' unless availability_zone
+        availability_zone[0..-2]
       end
 
       def get_virtualization_type(creds, instance_id)
