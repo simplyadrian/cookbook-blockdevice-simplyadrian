@@ -1,22 +1,22 @@
-if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
-    node['blockdevice_nativex']['restore'][:take_action]
+if (node['blockdevice_simplyadrian']['ec2'] || node['cloud']['provider'] == 'ec2') &&
+    node['blockdevice_simplyadrian']['restore'][:take_action]
 
   aws = Chef::EncryptedDataBagItem.load("credentials", "aws")
   include_recipe 'aws'
-  ::Chef::Recipe.send(:include, Nativex::Blockdevice::Helpers)
+  ::Chef::Recipe.send(:include, simplyadrian::Blockdevice::Helpers)
 
   original_volume_ids = node['aws']['ebs_volume'].to_s.scan(/vol-[a-zA-Z0-9]+/)
-  volume_timeout = node['blockdevice_nativex']['max_timeout']
-  raid = node['blockdevice_nativex']['ebs']['raid']
-  new_device = node['blockdevice_nativex']['restore'][:restore_to_new_device]
-  device_to_restore = node['blockdevice_nativex']['restore'][:device_to_restore]
-  node.set['blockdevice_nativex']['restore_session'] ||= {} unless
-      node['blockdevice_nativex'].attribute?('restore_session')
-  node.set['blockdevice_nativex']['restore_session'][:restored_devices] ||= [] unless
-      node['blockdevice_nativex']['restore_session'].attribute?(:restored_devices)
+  volume_timeout = node['blockdevice_simplyadrian']['max_timeout']
+  raid = node['blockdevice_simplyadrian']['ebs']['raid']
+  new_device = node['blockdevice_simplyadrian']['restore'][:restore_to_new_device]
+  device_to_restore = node['blockdevice_simplyadrian']['restore'][:device_to_restore]
+  node.set['blockdevice_simplyadrian']['restore_session'] ||= {} unless
+      node['blockdevice_simplyadrian'].attribute?('restore_session')
+  node.set['blockdevice_simplyadrian']['restore_session'][:restored_devices] ||= [] unless
+      node['blockdevice_simplyadrian']['restore_session'].attribute?(:restored_devices)
   session_in_progress = false
-  session_in_progress = node['blockdevice_nativex']['restore_session'][:in_progress] if
-      node['blockdevice_nativex']['restore_session'].attribute?(:in_progress)
+  session_in_progress = node['blockdevice_simplyadrian']['restore_session'][:in_progress] if
+      node['blockdevice_simplyadrian']['restore_session'].attribute?(:in_progress)
   device_ids = []
   device_id = nil
   glob_regex = nil
@@ -64,14 +64,14 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
   end
 
   # Dont restore more than once for the same device, remove the deivce from restored_devices to restore it again
-  unless node['blockdevice_nativex']['restore_session'].attribute?(:restored_devices) &&
-      node['blockdevice_nativex']['restore_session'][:restored_devices].include?(device_id)
+  unless node['blockdevice_simplyadrian']['restore_session'].attribute?(:restored_devices) &&
+      node['blockdevice_simplyadrian']['restore_session'][:restored_devices].include?(device_id)
 
     # Match volume id to device
-    if node['blockdevice_nativex']['restore_session'].attribute?(:in_progress) &&
-        node['blockdevice_nativex']['restore_session'][:in_progress]
-      snaps = node['blockdevice_nativex']['restore_session'][:snaps]
-      final_volume_ids = node['blockdevice_nativex']['restore_session'][:final_volume_ids]
+    if node['blockdevice_simplyadrian']['restore_session'].attribute?(:in_progress) &&
+        node['blockdevice_simplyadrian']['restore_session'][:in_progress]
+      snaps = node['blockdevice_simplyadrian']['restore_session'][:snaps]
+      final_volume_ids = node['blockdevice_simplyadrian']['restore_session'][:final_volume_ids]
     else
       volume_attributes = node['aws']['ebs_volume']
       original_volume_ids.each do |original_volume_id|
@@ -107,17 +107,17 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
           end
         end
         snapshot_details =
-            get_snapshot_id(aws, original_volume_id, node['blockdevice_nativex']['restore'][:restore_point])
+            get_snapshot_id(aws, original_volume_id, node['blockdevice_simplyadrian']['restore'][:restore_point])
         final_volume_ids[original_volume_id] = snapshot_details[:snapshot_id]
         snaps[snapshot_details[:snapshot_id]] = snapshot_details[:volume_size]
       end
-      node.set['blockdevice_nativex']['restore_session'][:in_progress] = true
-      node.set['blockdevice_nativex']['restore_session'][:snaps] = snaps
-      node.set['blockdevice_nativex']['restore_session'][:final_volume_ids] = final_volume_ids
+      node.set['blockdevice_simplyadrian']['restore_session'][:in_progress] = true
+      node.set['blockdevice_simplyadrian']['restore_session'][:snaps] = snaps
+      node.set['blockdevice_simplyadrian']['restore_session'][:final_volume_ids] = final_volume_ids
       node.save unless Chef::Config[:solo]
     end
 
-    mount node['blockdevice_nativex']['dir'] do
+    mount node['blockdevice_simplyadrian']['dir'] do
       device device_id
       action :umount
     end
@@ -125,7 +125,7 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
     # Detach old volume(s)
     final_volume_ids.each do |volume_id,snapshot_id|
       status = get_volume_status(aws, volume_id)
-      blockdevice_nativex_volume volume_id do
+      blockdevice_simplyadrian_volume volume_id do
         access_key_id aws['aws_access_key_id']
         secret_access_key aws['aws_secret_access_key']
         force true
@@ -133,7 +133,7 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
         only_if { status[:status] == 'in-use' }
       end
 
-      # Ensure volume does not remount on next run of blockdevice-nativex cookbook
+      # Ensure volume does not remount on next run of blockdevice-simplyadrian cookbook
       aws_resource_tag 'tag_data_volumes' do
         aws_access_key aws['aws_access_key_id']
         aws_secret_access_key aws['aws_secret_access_key']
@@ -166,8 +166,8 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
         aws_access_key aws['aws_access_key_id']
         aws_secret_access_key aws['aws_secret_access_key']
         disk_size volume_size
-        disk_count node['blockdevice_nativex']['ebs']['count']
-        level node['blockdevice_nativex']['ebs']['level']
+        disk_count node['blockdevice_simplyadrian']['ebs']['count']
+        level node['blockdevice_simplyadrian']['ebs']['level']
         snapshots snap_ids
       end
     else
@@ -180,7 +180,7 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
         aws_secret_access_key aws['aws_secret_access_key']
         size volume_size
         snapshot_id snap_id
-        most_recent_snapshot if node['blockdevice_nativex']['restore'][:restore_point] == :latest
+        most_recent_snapshot if node['blockdevice_simplyadrian']['restore'][:restore_point] == :latest
         action :create
         not_if { new_volume_precheck[:status] == 'available' }
       end
@@ -193,7 +193,7 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
       end
       ruby_block 'waiting_for_volume_to_create' do
         block do
-          wait_volume_lwrp = Chef::Resource::BlockdeviceNativexVolume.new(new_volume_id[:id], run_context)
+          wait_volume_lwrp = Chef::Resource::BlockdevicesimplyadrianVolume.new(new_volume_id[:id], run_context)
           wait_volume_lwrp.access_key_id(aws['aws_access_key_id'])
           wait_volume_lwrp.secret_access_key(aws['aws_secret_access_key'])
           wait_volume_lwrp.wait_for('create')
@@ -208,7 +208,7 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
       new_volume_id = get_volume_id(aws, snap_id)
       ruby_block 'attach_restored_volume' do
         block do
-          attach_volume_lwrp = Chef::Resource::BlockdeviceNativexVolume.new(new_volume_id[:id], run_context)
+          attach_volume_lwrp = Chef::Resource::BlockdevicesimplyadrianVolume.new(new_volume_id[:id], run_context)
           attach_volume_lwrp.access_key_id(aws['aws_access_key_id'])
           attach_volume_lwrp.secret_access_key(aws['aws_secret_access_key'])
           attach_volume_lwrp.device(new_device_id)
@@ -223,7 +223,7 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
     new_volume_id = get_volume_id(aws, snap_id)
     ruby_block 'waiting_for_volume_to_attach' do
       block do
-        wait_volume_lwrp = Chef::Resource::BlockdeviceNativexVolume.new(new_volume_id[:id], run_context)
+        wait_volume_lwrp = Chef::Resource::BlockdevicesimplyadrianVolume.new(new_volume_id[:id], run_context)
         wait_volume_lwrp.access_key_id(aws['aws_access_key_id'])
         wait_volume_lwrp.secret_access_key(aws['aws_secret_access_key'])
         wait_volume_lwrp.wait_for('attach')
@@ -235,7 +235,7 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
     end
 
     # Mount new volume
-    mount node['blockdevice_nativex']['dir'] do
+    mount node['blockdevice_simplyadrian']['dir'] do
       device new_device_id
       options 'noatime'
       action :mount
@@ -243,16 +243,16 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
 
     # Clean up
     new_volume_id = get_volume_id(aws, snap_id)
-    lsblk = `lsblk | grep "#{node['blockdevice_nativex']['dir']}"`
+    lsblk = `lsblk | grep "#{node['blockdevice_simplyadrian']['dir']}"`
     if new_volume_id[:status] == 'in-use' && lsblk.include?(new_device_id.split('/').last)
       # Keep track of restored volumes
       node.set['aws']['ebs_volume']['data_volume']['volume_id'] = new_volume_id[:id]
-      node.set['blockdevice_nativex']['restore_session'][:restored_devices] = device_id
-      node.set['blockdevice_nativex']['restore_session'][:in_progress] = false
+      node.set['blockdevice_simplyadrian']['restore_session'][:restored_devices] = device_id
+      node.set['blockdevice_simplyadrian']['restore_session'][:in_progress] = false
       node.save unless Chef::Config[:solo]
 
       # Tag old volume for deletion
-      time = Time.now + (node['blockdevice_nativex']['restore'][:destroy_volumes_after]*60*60)
+      time = Time.now + (node['blockdevice_simplyadrian']['restore'][:destroy_volumes_after]*60*60)
       aws_resource_tag 'tag_data_volumes' do
         aws_access_key aws['aws_access_key_id']
         aws_secret_access_key aws['aws_secret_access_key']
@@ -264,7 +264,7 @@ if (node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2') &&
 
       # Delete old volumes if they are ready for deletion
       original_volume_ids.each do |original_volume_id|
-        blockdevice_nativex_volume original_volume_id do
+        blockdevice_simplyadrian_volume original_volume_id do
           access_key_id aws['aws_access_key_id']
           secret_access_key aws['aws_secret_access_key']
           retention_check true

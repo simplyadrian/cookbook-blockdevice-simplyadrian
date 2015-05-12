@@ -1,7 +1,7 @@
-blockdevice-nativex CHANGELOG
+blockdevice-simplyadrian CHANGELOG
 =============================
 
-This file is used to list changes made in each version of the blockdevice-nativex cookbook.
+This file is used to list changes made in each version of the blockdevice-simplyadrian cookbook.
 
 0.3.0
 -----
@@ -25,7 +25,7 @@ detaching volumes.
 
 0.1.0
 -----
-- [Adrian Herrera] - Initial release of blockdevice-nativex
+- [Adrian Herrera] - Initial release of blockdevice-simplyadrian
 
 - - -
 Check the [Markdown Syntax Guide](http://daringfireball.net/projects/markdown/syntax) for help with Markdown.

@@ -1,15 +1,15 @@
-if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
+if node['blockdevice_simplyadrian']['ec2'] || node['cloud']['provider'] == 'ec2'
   aws = Chef::EncryptedDataBagItem.load('credentials', 'aws')
   include_recipe 'aws'  
 
-  if node['blockdevice_nativex']['filesystem'] == 'xfs'
+  if node['blockdevice_simplyadrian']['filesystem'] == 'xfs'
     execute 'xfs freeze' do
-      command "xfs_freeze -f #{node['blockdevice_nativex']['dir']}"
+      command "xfs_freeze -f #{node['blockdevice_simplyadrian']['dir']}"
     end
   end
 
   device_id = nil
-  if node['blockdevice_nativex']['ebs']['raid']
+  if node['blockdevice_simplyadrian']['ebs']['raid']
     Dir.glob('/dev/md[0-9]*').each do |dir|
       Chef::Log.error('More than one /dev/mdX found.') unless device_id.nil?
       device_id = dir
@@ -32,7 +32,7 @@ if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
       aws_ebs_volume "#{node.hostname}_#{node.chef_environment}" do
         aws_access_key aws['aws_access_key_id']
         aws_secret_access_key aws['aws_secret_access_key']
-        size node['blockdevice_nativex']['ebs']['size']
+        size node['blockdevice_simplyadrian']['ebs']['size']
         device device_id
         action :snapshot
         volume_id vol.call
@@ -41,7 +41,7 @@ if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
       end
       aws_ebs_volume "#{node.hostname}_#{node.chef_environment}" do
         volume_id vol.call
-        snapshots_to_keep node['blockdevice_nativex']['snapshots_to_keep']
+        snapshots_to_keep node['blockdevice_simplyadrian']['snapshots_to_keep']
         action :prune
         ignore_failure true
       end
@@ -49,9 +49,9 @@ if node['blockdevice_nativex']['ec2'] || node['cloud']['provider'] == 'ec2'
     end
   end
 
-  if node['blockdevice_nativex']['filesystem'] == 'xfs'
+  if node['blockdevice_simplyadrian']['filesystem'] == 'xfs'
     execute 'xfs unfreeze' do
-      command "xfs_freeze -u #{node['blockdevice_nativex']['dir']}"
+      command "xfs_freeze -u #{node['blockdevice_simplyadrian']['dir']}"
     end
   end
 end

@@ -1,4 +1,4 @@
-blockdevice-nativex Cookbook
+blockdevice-simplyadrian Cookbook
 ============================
 This cookbook provides recipes that create, tag, and snapshot EBS volumes.
 
@@ -6,7 +6,7 @@ Requirements
 ------------
 The instance must be launched using knife-ec2 or the aws::ec2_hints recipe must be assigned.
 
-Depends on aws community cookbook. When launching HVM instances, NativeX fork of aws cookbook is required.
+Depends on aws community cookbook. When launching HVM instances, simplyadrian fork of aws cookbook is required.
 Depends on xfs community cookbook if filesystem will be xfs.
 
 An Amazon Web Services account is required. The Access Key and Secret Access Key are used to authenticate with EC2.
@@ -15,7 +15,7 @@ Recipes
 -------
 #### default.rb
 Calls xfs::default if the filesystem will be xfs
-also calls blockdevice-nativex::volumes
+also calls blockdevice-simplyadrian::volumes
 
 #### snapshots_take.rb
 Snapshots the instance EBS volume on each chef client run and prunes old snapshots automatically. Number of snapshots
@@ -26,7 +26,7 @@ attributes are on available. It will work on subsequent runs.
 
 #### snapshots_restore.rb
 Restores an EBS volume from snapshot. You must take snapshot(s) of the volume first using the
-blockdevice-nativex::snapshots_restore recipe. It is recommended that the restore recipe is last in the nodes run
+blockdevice-simplyadrian::snapshots_restore recipe. It is recommended that the restore recipe is last in the nodes run
 list.
 
 To best ensure this recipe can match volumes to local devices the ebs_volume attribute data structure should look
@@ -65,14 +65,14 @@ Attributes
     <th>Default</th>
   </tr>
   <tr>
-    <td><tt>['blockdevice_nativex']['max_timeout']/tt></td>
+    <td><tt>['blockdevice_simplyadrian']['max_timeout']/tt></td>
     <td>Int</td>
     <td>Max timeout in seconds for volume and snapshot operations.</td>
     <td><tt>180</tt></td>
   </tr>
 </table>
 
-#### blockdevice-nativex::default
+#### blockdevice-simplyadrian::default
 <table>
   <tr>
     <th>Key</th>
@@ -81,44 +81,44 @@ Attributes
     <th>Default</th>
   </tr>
   <tr>
-    <td><tt>['blockdevice_nativex']['ec2']</tt></td>
+    <td><tt>['blockdevice_simplyadrian']['ec2']</tt></td>
     <td>Boolean</td>
     <td>Must be set to true if knife-ec2 is not used to launch the instance and aws::ec2_hints is not assigned.</td>
     <td><tt>false</tt></td>
   </tr>
   <tr>
-    <td><tt>['blockdevice_nativex']['dir']</tt></td>
+    <td><tt>['blockdevice_simplyadrian']['dir']</tt></td>
     <td>String</td>
     <td>Mount point for EBS volume.</td>
     <td><tt>"/mnt/ebs"</tt></td>
   </tr>
   <tr>
-    <td><tt>['blockdevice_nativex']['mount_point_group']</tt></td>
+    <td><tt>['blockdevice_simplyadrian']['mount_point_group']</tt></td>
     <td>String</td>
     <td>Group to mount EBS volume as.</td>
     <td><tt>"root"</tt></td>
   </tr>
   <tr>
-    <td><tt>['blockdevice_nativex']['recurse_permissions']</tt></td>
+    <td><tt>['blockdevice_simplyadrian']['recurse_permissions']</tt></td>
     <td>Boolean</td>
     <td>Whether to use recursion when assigning permissions.</td>
     <td><tt>true</tt></td>
   </tr>
   <tr>
-    <td><tt>['blockdevice_nativex']['filesystem']</tt></td>
+    <td><tt>['blockdevice_simplyadrian']['filesystem']</tt></td>
     <td>String</td>
     <td>File system to format the EBS volume as.</td>
     <td><tt>"ext4"</tt></td>
   </tr>
   <tr>
-    <td><tt>['blockdevice_nativex']['ebs']</tt></td>
+    <td><tt>['blockdevice_simplyadrian']['ebs']</tt></td>
     <td>Hash</td>
     <td>Override attributes for aws_ebs_volume provider from aws cookbook.</td>
     <td><tt>See aws_ebs_volume. Example usage below.</tt></td>
   </tr>
 </table>
 
-#### blockdevice-nativex::snapshots_take
+#### blockdevice-simplyadrian::snapshots_take
 <table>
   <tr>
     <th>Key</th>
@@ -127,14 +127,14 @@ Attributes
     <th>Default</th>
   </tr>
   <tr>
-    <td><tt>['blockdevice_nativex']['snapshots_to_keep']</tt></td>
+    <td><tt>['blockdevice_simplyadrian']['snapshots_to_keep']</tt></td>
     <td>Int</td>
     <td>Number of snapshots to retain during pruning operation. Oldest snapshots will be pruned first.</td>
     <td><tt>5</tt></td>
   </tr>
 </table>
 
-#### blockdevice-nativex::snapshots_restore
+#### blockdevice-simplyadrian::snapshots_restore
 <table>
   <tr>
     <th>Key</th>
@@ -143,39 +143,39 @@ Attributes
     <th>Default</th>
   </tr>
   <tr>
-    <td><tt>['blockdevice_nativex']['restore'][:take_action]</tt></td>
+    <td><tt>['blockdevice_simplyadrian']['restore'][:take_action]</tt></td>
     <td>Bool</td>
     <td>Whether or not to restore snapshots during chef run.</td>
     <td><tt>false</tt></td>
   </tr>
   <tr>
-    <td><tt>['blockdevice_nativex']['restore'][:destroy_volumes_after]</tt></td>
+    <td><tt>['blockdevice_simplyadrian']['restore'][:destroy_volumes_after]</tt></td>
     <td>Int</td>
     <td>Number of hours to wait before destroying the old ebs volume after restore, set to 0 for immediate
       destruction</td>
     <td><tt>0</tt></td>
   </tr>
   <tr>
-    <td><tt>['blockdevice_nativex']['restore'][:device_to_restore]</tt></td>
+    <td><tt>['blockdevice_simplyadrian']['restore'][:device_to_restore]</tt></td>
     <td>String</td>
     <td>Id of device to restore, if blank it will restore the first device found.</td>
     <td><tt>''</tt></td>
   </tr>
   <tr>
-    <td><tt>['blockdevice_nativex']['restore'][:restore_point]</tt></td>
+    <td><tt>['blockdevice_simplyadrian']['restore'][:restore_point]</tt></td>
     <td>Symbol</td>
     <td>Valid options :latest :hourly :daily :weekly :monthly</td>
     <td><tt>:latest</tt></td>
   </tr>
   <tr>
-    <td><tt>['blockdevice_nativex']['restore'][:restore_point_offset]</tt></td>
+    <td><tt>['blockdevice_simplyadrian']['restore'][:restore_point_offset]</tt></td>
     <td>Int</td>
     <td>Example: if restore_point is set to daily and restore_point_offset is set to 1 it will restore to :latest
     daily -1. Set to 0 to choose the latest. (positive integers only)</td>
     <td><tt>false</tt></td>
   </tr>
     <tr>
-      <td><tt>['blockdevice_nativex']['restore'][:restore_to_new_device]</tt></td>
+      <td><tt>['blockdevice_simplyadrian']['restore'][:restore_to_new_device]</tt></td>
       <td>Bool</td>
       <td>Set to true if you need to restore to a new device or if restoration to the current device is failing</td>
       <td><tt>false</tt></td>
@@ -192,11 +192,11 @@ Actions:
 * `wait`   - waits for a volume to create or attach
 
 Attribute Parameters:
-* `access_key_id`, `secret_access_key` - passed to Nativex::Blockdevice::Helpers to authenticate to AWS
+* `access_key_id`, `secret_access_key` - passed to simplyadrian::Blockdevice::Helpers to authenticate to AWS
 * `volume_id` - Default parameter. ID of EBS volume
 * `force` - Works with action :detach to force the operation
 * `device` - Local block device where volume is attached/needs to be attached
-* `instance_id` - ID of instance can be grabbed using Nativex::Blockdevice::Helpers get_instance_id
+* `instance_id` - ID of instance can be grabbed using simplyadrian::Blockdevice::Helpers get_instance_id
 * `retention_check` - Used when deleting volumes to check that resource tag :Destroy is set to true and :DestructionTime
 has lapsed
 * `wait_for` - Used only with the :wait action. Valid options are 'attach' or 'create'
@@ -207,21 +207,21 @@ See usage examples in snapshots_restore.rb
 
 Usage
 -----
-Include `blockdevice-nativex` in your node's `run_list`:
+Include `blockdevice-simplyadrian` in your node's `run_list`:
 
 ```json
 {
   "name":"my_node",
   "run_list": [
-    "recipe[blockdevice-nativex]"
+    "recipe[blockdevice-simplyadrian]"
   ]
 }
 ```
 
-Configure `blockdevice-nativex` in a role:
+Configure `blockdevice-simplyadrian` in a role:
 
 ```json
-"blockdevice_nativex": {
+"blockdevice_simplyadrian": {
   "dir": "/mnt/ebs",
   "mount_point_group": "predictive_analytics",
   "recurse_permissions": false,
@@ -239,15 +239,15 @@ Configure `blockdevice-nativex` in a role:
 
 Note: Size is in GB
 
-HVM override attribute is specific to the NativeX fork of aws cookbook and is required to be set to 'true' when
-provisioning EBS volumes on HVM instances. blockdevice-nativex will try to auto-detect HVM instances. If this fails
+HVM override attribute is specific to the simplyadrian fork of aws cookbook and is required to be set to 'true' when
+provisioning EBS volumes on HVM instances. blockdevice-simplyadrian will try to auto-detect HVM instances. If this fails
 you can override the value using the attribute.
 
 License and Authors
 -------------------
 Authors: Adrian Herrera, Jesse Hauf, Brett Stime
 
-Copyright 2014-2015, NativeX Holdings LLC.
+Copyright 2014-2015, simplyadrian Holdings LLC.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

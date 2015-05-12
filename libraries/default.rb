@@ -1,4 +1,4 @@
-module Nativex
+module simplyadrian
   module Blockdevice
     module Helpers
 
@@ -94,9 +94,9 @@ module Nativex
       end
 
       def xfs_filesystem(action)
-        if node['blockdevice_nativex']['filesystem'] == 'xfs'
+        if node['blockdevice_simplyadrian']['filesystem'] == 'xfs'
           execute 'xfs freeze' do
-            command "xfs_freeze -#{action[0,1]} #{node['blockdevice_nativex']['dir']}"
+            command "xfs_freeze -#{action[0,1]} #{node['blockdevice_simplyadrian']['dir']}"
           end
         end
       end

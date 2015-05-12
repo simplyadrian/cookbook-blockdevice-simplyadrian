@@ -1,4 +1,4 @@
-include Nativex::Blockdevice::Helpers
+include simplyadrian::Blockdevice::Helpers
 
 def whyrun_supported?
   true
