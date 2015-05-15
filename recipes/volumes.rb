@@ -9,7 +9,7 @@ end
 if node['blockdevice_simplyadrian']['ec2'] || node['cloud']['provider'] == 'ec2'
   aws = Chef::EncryptedDataBagItem.load("credentials", "aws")
   include_recipe 'aws'
-  ::Chef::Recipe.send(:include, simplyadrian::Blockdevice::Helpers)
+  ::Chef::Recipe.send(:include, Simplyadrian::Blockdevice::Helpers)
 
   # Determine if this is a HVM or Paravirtual instance
   instance_id = get_instance_id

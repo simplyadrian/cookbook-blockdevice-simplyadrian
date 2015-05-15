@@ -3,7 +3,7 @@ if (node['blockdevice_simplyadrian']['ec2'] || node['cloud']['provider'] == 'ec2
 
   aws = Chef::EncryptedDataBagItem.load("credentials", "aws")
   include_recipe 'aws'
-  ::Chef::Recipe.send(:include, simplyadrian::Blockdevice::Helpers)
+  ::Chef::Recipe.send(:include, Simplyadrian::Blockdevice::Helpers)
 
   original_volume_ids = node['aws']['ebs_volume'].to_s.scan(/vol-[a-zA-Z0-9]+/)
   volume_timeout = node['blockdevice_simplyadrian']['max_timeout']
@@ -193,7 +193,7 @@ if (node['blockdevice_simplyadrian']['ec2'] || node['cloud']['provider'] == 'ec2
       end
       ruby_block 'waiting_for_volume_to_create' do
         block do
-          wait_volume_lwrp = Chef::Resource::BlockdevicesimplyadrianVolume.new(new_volume_id[:id], run_context)
+          wait_volume_lwrp = Chef::Resource::BlockdeviceSimplyadrianVolume.new(new_volume_id[:id], run_context)
           wait_volume_lwrp.access_key_id(aws['aws_access_key_id'])
           wait_volume_lwrp.secret_access_key(aws['aws_secret_access_key'])
           wait_volume_lwrp.wait_for('create')
@@ -208,7 +208,7 @@ if (node['blockdevice_simplyadrian']['ec2'] || node['cloud']['provider'] == 'ec2
       new_volume_id = get_volume_id(aws, snap_id)
       ruby_block 'attach_restored_volume' do
         block do
-          attach_volume_lwrp = Chef::Resource::BlockdevicesimplyadrianVolume.new(new_volume_id[:id], run_context)
+          attach_volume_lwrp = Chef::Resource::BlockdeviceSimplyadrianVolume.new(new_volume_id[:id], run_context)
           attach_volume_lwrp.access_key_id(aws['aws_access_key_id'])
           attach_volume_lwrp.secret_access_key(aws['aws_secret_access_key'])
           attach_volume_lwrp.device(new_device_id)
@@ -223,7 +223,7 @@ if (node['blockdevice_simplyadrian']['ec2'] || node['cloud']['provider'] == 'ec2
     new_volume_id = get_volume_id(aws, snap_id)
     ruby_block 'waiting_for_volume_to_attach' do
       block do
-        wait_volume_lwrp = Chef::Resource::BlockdevicesimplyadrianVolume.new(new_volume_id[:id], run_context)
+        wait_volume_lwrp = Chef::Resource::BlockdeviceSimplyadrianVolume.new(new_volume_id[:id], run_context)
         wait_volume_lwrp.access_key_id(aws['aws_access_key_id'])
         wait_volume_lwrp.secret_access_key(aws['aws_secret_access_key'])
         wait_volume_lwrp.wait_for('attach')

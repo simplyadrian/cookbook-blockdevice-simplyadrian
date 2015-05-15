@@ -1,4 +1,4 @@
-module simplyadrian
+module Simplyadrian
   module Blockdevice
     module Helpers
 

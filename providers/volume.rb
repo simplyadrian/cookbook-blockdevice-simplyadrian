@@ -1,4 +1,4 @@
-include simplyadrian::Blockdevice::Helpers
+include Simplyadrian::Blockdevice::Helpers
 
 def whyrun_supported?
   true
